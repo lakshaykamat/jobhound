@@ -1,0 +1,79 @@
+{
+  "cycle": {
+    "queries": [
+      "<role> remote <region>",
+      "<role> <city>"
+    ],
+    "score_threshold": 70,
+    "max_pages_per_query": 1,
+    "staleness_days": 14,
+    "dedup_strategy": "title_company_via",
+    "max_jobs_per_hour": 10,
+    "max_job_age_days": 7
+  },
+  "daemon": {
+    "poll_interval_seconds": 86400,
+    "monthly_search_cap": 100,
+    "search_warn_threshold": 80
+  },
+  "serpapi": {
+    "country": "in",
+    "language": "en",
+    "platforms": [
+      "linkedin",
+      "wellfound",
+      "instahyre",
+      "naukri",
+      "cutshort",
+      "uplers",
+      "hirect",
+      "lever",
+      "greenhouse",
+      "ashby"
+    ],
+    "location": "",
+    "chips": ""
+  },
+  "openai": {
+    "model": "gpt-5.2",
+    "llm_concurrency": 4
+  },
+  "extraction": {
+    "resume_max_chars": 12000,
+    "description_max_chars": 4000,
+    "chat_max_tokens": 200,
+    "analyze_max_tokens": 80,
+    "score_max_tokens": 500,
+    "profile_extraction_max_tokens": 800
+  },
+  "scoring": {
+    "axis_weights": {
+      "skills_match": 30,
+      "seniority_match": 15,
+      "location_match": 15,
+      "comp_match": 10,
+      "domain_match": 15,
+      "recency": 15
+    },
+    "dealbreaker_score_cap": 40,
+    "recency_full_days": 7,
+    "recency_decay_days": 60
+  },
+  "profile": {
+    "skills": ["<lowercase canonical tech token>", "..."],
+    "seniority": "junior | mid | senior | staff | principal",
+    "years_experience": 0,
+    "domains": ["<lowercase domain token>", "..."],
+    "role_titles": ["<past or family-preference role>", "..."],
+    "locations": ["<city>", "remote"],
+    "work_authorization": ["<iso 3166-1 alpha-2, e.g. 'in', 'us', 'gb'>"],
+    "work_mode_preference": ["remote", "hybrid", "onsite"],
+    "relocation_open": false,
+    "preferred_company_size": ["startup", "scaleup", "enterprise"],
+    "availability": "<e.g. 'immediate', '2 weeks notice', '1 month notice'>",
+    "min_annual_salary": null,
+    "compensation_currency": "<iso 4217, e.g. 'inr', 'usd'>",
+    "highlights": ["<verb-led achievement with metric/scope>", "..."],
+    "notes": "<one short sentence: anything distinctive other fields don't capture>"
+  }
+}

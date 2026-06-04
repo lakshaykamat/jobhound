@@ -1,0 +1,20 @@
+{
+  "name": "job-finder",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/cli/daemon.ts",
+    "bootstrap": "ts-node src/cli/bootstrap.ts",
+    "verify-sheet": "ts-node src/cli/verify-sheet.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0",
+    "pdf-parse": "^2.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.0"
+  }
+}

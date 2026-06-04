@@ -1,0 +1,16 @@
+services:
+  job-finder:
+    build: .
+    image: job-finder:latest
+    container_name: job-finder
+    restart: always
+    init: true
+    env_file:
+      - .env
+    environment:
+      TZ: UTC
+      DATA_DIR: /app/.data
+    volumes:
+      - ./config.json:/app/config.json
+      - ./data:/app/data:ro
+      - ./.data:/app/.data
