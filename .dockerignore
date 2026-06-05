@@ -6,10 +6,6 @@ dist
 .env.*
 !.env.example
 config.json
-data
-*.pdf
-*.txt
-!resume.txt.example
 *.log
 *.md
 !CLAUDE.md

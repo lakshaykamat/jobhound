@@ -2,17 +2,19 @@
 
 FROM node:22-slim AS builder
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN pnpm run build
 
 FROM node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV TZ=UTC
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod && pnpm store prune
 COPY --from=builder /app/dist ./dist
 CMD ["node", "dist/cli/daemon.js", "/app/config.json"]
