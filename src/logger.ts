@@ -2,7 +2,7 @@
 // output when stdout is a TTY. Configure via env:
 //   LOG_LEVEL  = debug | info | warn | error   (default: info)
 //   LOG_FORMAT = json | pretty                  (default: pretty if TTY, else json)
-//   LOG_SERVICE = service name tag              (default: job-finder)
+//   LOG_SERVICE = service name tag              (default: jobhound)
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -15,7 +15,7 @@ export interface LogFields {
 
 const ENV_LEVEL = parseLevel(process.env.LOG_LEVEL) ?? 'info';
 const ENV_FORMAT = parseFormat(process.env.LOG_FORMAT);
-const SERVICE = process.env.LOG_SERVICE || 'job-finder';
+const SERVICE = process.env.LOG_SERVICE || 'jobhound';
 const PRETTY = ENV_FORMAT === 'pretty';
 const COLOR = PRETTY && process.stdout.isTTY && !process.env.NO_COLOR && process.env.TERM !== 'dumb';
 

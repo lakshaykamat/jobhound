@@ -1,4 +1,4 @@
-# Job Finder
+# Jobhound
 
 A daemon that discovers job postings, scores them against your resume, and writes the results to a Google Sheet. One operator, one resume, one Sheet. The Sheet holds jobs; a local `.data/` directory holds cost meters, SerpApi usage, and per-job event logs.
 
@@ -103,8 +103,8 @@ apps-script/Code.gs   # Google Sheets bridge — deploy as a Web App
 You'll need: Docker, a SerpApi key, an OpenAI key, and a Google account.
 
 ```bash
-git clone <this-repo> job-finder
-cd job-finder
+git clone <this-repo> jobhound
+cd jobhound
 
 cp .env.example .env             # fill in 4 values — see docs/deploy.md §3
 cp config.example.json config.json   # then hand-edit queries + profile
@@ -128,8 +128,8 @@ For end-to-end deployment, Apps Script setup, updating, and troubleshooting, rea
 Prerequisites: Node.js 22+ on the host. Everything else is the same — `.env` and `config.json`.
 
 ```bash
-git clone <this-repo> job-finder
-cd job-finder
+git clone <this-repo> jobhound
+cd jobhound
 
 cp .env.example .env             # fill in 4 values — see docs/deploy.md §3
 cp config.example.json config.json   # then hand-edit queries + profile
@@ -182,10 +182,10 @@ Everything else has sane defaults — leave it alone unless you have a reason. T
 docker compose build
 
 # run a single cycle (no loop)
-docker compose run --rm job-finder node dist/cli/daemon.js --once
+docker compose run --rm jobhound node dist/cli/daemon.js --once
 
 # verify the Sheet backend (read + write self-test)
-docker compose run --rm job-finder node dist/cli/verify-sheet.js
+docker compose run --rm jobhound node dist/cli/verify-sheet.js
 
 # start the long-running daemon
 docker compose up -d

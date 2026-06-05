@@ -51,7 +51,7 @@ async function main(): Promise<void> {
   }
 
   console.log('\n=== Tracker checks (.data write + read in tmp dir) ===');
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'job-finder-tracker-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'jobhound-tracker-'));
   try {
     const tracker = new Tracker(tmpDir);
     await check('recordJobEvent → jobs.jsonl', async () => {

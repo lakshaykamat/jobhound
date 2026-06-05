@@ -1,8 +1,8 @@
 services:
-  job-finder:
+  jobhound:
     build: .
-    image: job-finder:latest
-    container_name: job-finder
+    image: jobhound:latest
+    container_name: jobhound
     restart: always
     init: true
     env_file:

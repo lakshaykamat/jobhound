@@ -1,4 +1,4 @@
-# Job Finder
+# Jobhound
 
 Daemon: discover jobs (SerpApi Google Jobs) → analyze → score against resume profile → upsert to Google Sheet. Cost & usage tracking is local. Full spec in `docs/prd.md`.
 

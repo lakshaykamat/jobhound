@@ -1,4 +1,4 @@
-# Job Finder — Product Requirements Document
+# Jobhound — Product Requirements Document
 
 **Status:** Draft v0.2
 **Owner:** Lakshay
@@ -9,7 +9,7 @@
 
 ## 1. Summary
 
-Job Finder is a stateless background worker that discovers job postings, extracts structured data from each, scores it against a hand-written fit profile in `config.json`, and writes the results to a Google Sheet. It runs as a daemon — a long-lived scheduler loop — but holds no durable in-memory state. The Google Sheet is the single source of truth; any run can be killed and restarted without data loss or duplication.
+Jobhound is a stateless background worker that discovers job postings, extracts structured data from each, scores it against a hand-written fit profile in `config.json`, and writes the results to a Google Sheet. It runs as a daemon — a long-lived scheduler loop — but holds no durable in-memory state. The Google Sheet is the single source of truth; any run can be killed and restarted without data loss or duplication.
 
 Discovery uses one aggregator API (SerpApi's Google Jobs endpoint) rather than scraping individual job boards. Google Jobs aggregates Indeed, LinkedIn, Naukri, and thousands of other sources into one query, localized to India. This collapses discovery from eight fragile scrapers to a single API call and keeps the design login-free and stateless.
 

@@ -17,7 +17,7 @@ End-to-end ops guide. Primary path uses Docker + Compose v2; a non-Docker path (
 2. Extensions → Apps Script. Replace the default `Code.gs` with the contents of [`apps-script/Code.gs`](../apps-script/Code.gs).
 3. Project Settings (gear icon) → **Script properties** → add a property: `SHARED_TOKEN` = any random string. Save it; you'll need it in `.env`.
 4. Deploy → **New deployment** → Type **Web app**:
-   - Description: `job-finder`
+   - Description: `jobhound`
    - Execute as: **Me**
    - Who has access: **Anyone**
 5. Click **Deploy**, copy the `/exec` URL.
@@ -26,8 +26,8 @@ End-to-end ops guide. Primary path uses Docker + Compose v2; a non-Docker path (
 ## 3. Clone the repo and configure secrets
 
 ```bash
-git clone <this-repo> job-finder
-cd job-finder
+git clone <this-repo> jobhound
+cd jobhound
 
 cp .env.example .env
 mkdir -p .data
@@ -68,7 +68,7 @@ The rest (`score_threshold`, `serpapi.*`, `openai.model`, `scoring.*`, `daemon.p
 Before burning SerpApi / OpenAI quota, verify the Sheet bridge and `.data/` writer:
 
 ```bash
-docker compose run --rm job-finder node dist/cli/verify-sheet.js
+docker compose run --rm jobhound node dist/cli/verify-sheet.js
 ```
 
 Runs read checks against the production `Jobs` tab (`ensureHeader`, `readAll`), then Sheet write checks (create sheet → write header → append row → read back → update cell) on a **temporary sheet that's deleted automatically** in the same Apps Script call. Then exercises the local Tracker by writing/reading a JSONL line and a monthly usage rollup in a tmp dir. Your production `Jobs` tab and `.data/` files are not touched. Exits non-zero on any failure.
@@ -78,7 +78,7 @@ If `selfTest` fails with `unknown action`, your Apps Script deployment is out of
 ## 7. Smoke test with a single cycle
 
 ```bash
-docker compose run --rm job-finder node dist/cli/daemon.js --once
+docker compose run --rm jobhound node dist/cli/daemon.js --once
 ```
 
 Expected: log lines from each stage, a `cycle complete: {...}` summary, one new line in `.data/cycles.jsonl`, per-job lines in `.data/jobs.jsonl`, and an updated `.data/usage-YYYY-MM.json`. New job postings appear in the `Jobs` tab of your Sheet with scores and rationales.
@@ -189,8 +189,8 @@ The exact same code paths work directly on the host — Docker is just packaging
 **Prerequisites:** Node.js 22+ and the four `.env` keys filled in (same as the Docker path).
 
 ```bash
-git clone <this-repo> job-finder
-cd job-finder
+git clone <this-repo> jobhound
+cd jobhound
 
 cp .env.example .env                 # fill in 4 values
 cp config.example.json config.json   # then hand-edit queries + profile
@@ -206,16 +206,16 @@ npm start                            # daemon loop in the foreground
 A minimal systemd unit:
 
 ```ini
-# /etc/systemd/system/job-finder.service
+# /etc/systemd/system/jobhound.service
 [Unit]
-Description=Job Finder daemon
+Description=Jobhound daemon
 After=network.target
 
 [Service]
 Type=simple
 User=<your-user>
-WorkingDirectory=/path/to/job-finder
-EnvironmentFile=/path/to/job-finder/.env
+WorkingDirectory=/path/to/jobhound
+EnvironmentFile=/path/to/jobhound/.env
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=10
@@ -224,4 +224,4 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-Then `sudo systemctl enable --now job-finder`. Logs land in `journalctl -u job-finder -f`; meters land in `./.data/` just like the Docker setup.
+Then `sudo systemctl enable --now jobhound`. Logs land in `journalctl -u jobhound -f`; meters land in `./.data/` just like the Docker setup.
