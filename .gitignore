@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+config.*.json
 config.json
 .data/
 todo.md
+coverage/

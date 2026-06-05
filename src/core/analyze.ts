@@ -1,7 +1,7 @@
 import { JobRecord, RawPosting, WorkMode } from '../types';
 import { chat } from '../adapters/llm';
-import { ExtractionConfig, OpenAiConfig } from '../config';
-import { VALID_WORK_MODES } from '../constants';
+import { OpenAiConfig } from '../config';
+import { ANALYZE_MAX_TOKENS, VALID_WORK_MODES } from '../constants';
 import { Logger, logger as rootLogger } from '../logger';
 import { ANALYZE_SCHEMA, ANALYZE_SYSTEM_PROMPT, buildAnalyzePrompt } from '../prompts';
 import { parsePostedAt } from './posted-at';
@@ -16,7 +16,6 @@ export async function analyzePosting(
   posting: RawPosting,
   apiKey: string,
   openai: OpenAiConfig,
-  extraction: ExtractionConfig,
   log: Logger = rootLogger,
 ): Promise<AnalyzeResult> {
   const now = new Date().toISOString();
@@ -33,7 +32,7 @@ export async function analyzePosting(
       missing_work_mode: workMode === 'unknown',
       missing_seniority: seniority === null,
     });
-    const inferred = await safeInfer(jobId, posting, apiKey, openai, extraction, log);
+    const inferred = await safeInfer(jobId, posting, apiKey, openai, log);
     tokens += inferred.tokens;
     if (workMode === 'unknown' && inferred.work_mode && isWorkMode(inferred.work_mode)) {
       workMode = inferred.work_mode;
@@ -71,19 +70,18 @@ async function safeInfer(
   posting: RawPosting,
   apiKey: string,
   openai: OpenAiConfig,
-  extraction: ExtractionConfig,
   log: Logger,
 ) {
   try {
     const result = await chat(
       [
         { role: 'system', content: ANALYZE_SYSTEM_PROMPT },
-        { role: 'user', content: buildAnalyzePrompt(posting, extraction.description_max_chars) },
+        { role: 'user', content: buildAnalyzePrompt(posting) },
       ],
       apiKey,
       {
         schema: ANALYZE_SCHEMA,
-        maxTokens: extraction.analyze_max_tokens,
+        maxTokens: ANALYZE_MAX_TOKENS,
         model: openai.model,
         log,
       },
@@ -138,18 +136,17 @@ function parseSalary(raw: string | null): { min: number | null; max: number | nu
   if (!raw) return { min: null, max: null };
   const s = raw.replace(/[,₹$]/g, '').toLowerCase();
 
-  const lpa = s.match(/(\d+(?:\.\d+)?)\s*[-–to]+\s*(\d+(?:\.\d+)?)\s*(?:lpa|lakh|lakhs|l\b)/);
-  if (lpa) return { min: Number(lpa[1]) * 100_000, max: Number(lpa[2]) * 100_000 };
+  const lpaRange = s.match(/(\d+(?:\.\d+)?)\s*[-–to]+\s*(\d+(?:\.\d+)?)\s*(?:lpa|lakh|lakhs|l\b)/);
+  if (lpaRange) return { min: Number(lpaRange[1]) * 100_000, max: Number(lpaRange[2]) * 100_000 };
+
+  const lpa = s.match(/(\d+(?:\.\d+)?)\s*(?:lpa|lakh|lakhs|l\b)/);
+  if (lpa) return { min: Number(lpa[1]) * 100_000, max: Number(lpa[1]) * 100_000 };
 
   const kRange = s.match(/(\d+(?:\.\d+)?)\s*[-–to]+\s*(\d+(?:\.\d+)?)\s*k\b/);
   if (kRange) return { min: Number(kRange[1]) * 1_000, max: Number(kRange[2]) * 1_000 };
 
-  const plain = s.match(/(\d+(?:\.\d+)?)\s*[-–to]+\s*(\d+(?:\.\d+)?)/);
-  if (plain) {
-    const min = Number(plain[1]);
-    const max = Number(plain[2]);
-    if (Number.isFinite(min) && Number.isFinite(max)) return { min, max };
-  }
+  const k = s.match(/(\d+(?:\.\d+)?)\s*k\b/);
+  if (k) return { min: Number(k[1]) * 1_000, max: Number(k[1]) * 1_000 };
 
   return { min: null, max: null };
 }

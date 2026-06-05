@@ -6,14 +6,15 @@
 export function parsePostedAt(raw: string | null): string | null {
   if (!raw) return null;
   const s = raw.toLowerCase().trim();
-  if (s.includes('just') || s.includes('today')) return isoDate(new Date());
+  if (/\b(just|today)\b/.test(s)) return isoDate(new Date());
 
-  const match = s.match(/(\d+)\s+(hour|day|week|month)/);
+  const match = s.match(/(\d+)\s*\+?\s*(minute|hour|day|week|month)/);
   if (!match) return null;
 
   const n = Number(match[1]);
   const days =
-    match[2] === 'hour' ? 0
+    match[2] === 'minute' ? 0
+    : match[2] === 'hour' ? 0
     : match[2] === 'day' ? n
     : match[2] === 'week' ? n * 7
     : n * 30;

@@ -3,7 +3,7 @@
 A daemon that discovers job postings, scores them against your resume, and writes the results to a Google Sheet. One operator, one resume, one Sheet. The Sheet holds jobs; a local `.data/` directory holds cost meters, SerpApi usage, and per-job event logs.
 
 ```
-SerpApi Google Jobs  →  analyze  →  score vs. your profile  →  upsert to Google Sheet
+SerpApi Google Jobs  →  dedup vs. Sheet  →  analyze + score new ones  →  upsert to Sheet
 ```
 
 Full design rationale: [`docs/prd.md`](docs/prd.md). Deployment instructions: [`docs/deploy.md`](docs/deploy.md).
@@ -13,11 +13,64 @@ Full design rationale: [`docs/prd.md`](docs/prd.md). Deployment instructions: [`
 ## What it does
 
 - **Discovers** postings via SerpApi's Google Jobs endpoint (one query → up to 10 results, opt-in pagination).
-- **Analyzes** each posting into a structured record (title, company, salary, work mode, seniority, …).
-- **Scores** each new posting 0–100 against a fit profile derived from your resume, with a short rationale.
 - **Dedupes** by content-hash `job_id` so the same posting never duplicates across runs.
-- **Marks stale** rows that haven't been re-found within `staleness_days`.
+- **Analyzes** each new posting into a structured record (title, company, salary, work mode, seniority, …).
+- **Scores** it 0–100 against a fit profile derived from your resume, with a short rationale.
+- **Writes once** per posting. Once a row is in the Sheet, the daemon never touches it again — the row is yours to mark `applied`, `reviewed`, or delete.
 - **Tracks all three cost meters locally** — monthly SerpApi searches, LLM tokens, and USD cost — in `.data/usage-YYYY-MM.json`, with per-cycle detail in `.data/cycles.jsonl` and per-job events in `.data/jobs.jsonl`. Refuses to call SerpApi once the monthly cap is reached.
+
+## How a cycle works
+
+```
+   ┌────────────────────────────────────────────┐
+   │  1. Search Google Jobs                     │
+   │                                            │
+   │  Runs each of your saved search queries    │
+   │  (e.g. "backend engineer noida"). About    │
+   │  10 results per query.                     │
+   └──────────────────────┬─────────────────────┘
+                          ▼
+   ┌────────────────────────────────────────────┐
+   │  2. Check what's already in the sheet      │
+   │                                            │
+   │   Seen before?  →  skip (no AI cost)       │
+   │   Brand new?    →  keep going              │
+   └──────────────────────┬─────────────────────┘
+                          ▼
+   ┌────────────────────────────────────────────┐
+   │  3. Drop postings that are too old         │
+   │                                            │
+   │  Anything posted more than a week ago      │
+   │  is ignored — you set the cutoff.          │
+   └──────────────────────┬─────────────────────┘
+                          ▼
+   ┌────────────────────────────────────────────┐
+   │  4. Have AI read and score the job         │
+   │                                            │
+   │  Compares the job description to your      │
+   │  resume profile and assigns 0–100,         │
+   │  plus a one-line reason.                   │
+   └──────────────────────┬─────────────────────┘
+                          ▼
+   ┌────────────────────────────────────────────┐
+   │  5. Save a new row to your spreadsheet     │
+   │                                            │
+   │   High score  →  marked as a match         │
+   │   Low score   →  saved but tagged filter   │
+   │   (existing rows are never edited)         │
+   └──────────────────────┬─────────────────────┘
+                          ▼
+   ┌────────────────────────────────────────────┐
+   │  6. Record cost, then sleep                │
+   │                                            │
+   │  Tracks searches used + AI tokens + USD,   │
+   │  then sleeps until the next cycle.         │
+   └──────────────────────┬─────────────────────┘
+                          ▼
+                   loops forever
+```
+
+Restarts don't re-fire immediately — the daemon remembers when the last cycle finished and waits out the remainder of `poll_interval_seconds` before starting another.
 
 ## Project layout
 
@@ -25,12 +78,10 @@ Full design rationale: [`docs/prd.md`](docs/prd.md). Deployment instructions: [`
 src/
 ├── adapters/      # External I/O — swap a provider without touching domain logic
 │   ├── llm.ts        # OpenAI chat
-│   ├── resume.ts     # PDF / TXT reader
 │   ├── serpapi.ts    # Google Jobs via SerpApi
 │   ├── sheets.ts     # Apps Script Web App client (jobs only)
 │   └── tracker.ts    # .data/ writer: cycles.jsonl, jobs.jsonl, usage-YYYY-MM.json
 ├── cli/           # Entrypoints
-│   ├── bootstrap.ts       # one-shot setup: resume → config.json
 │   ├── daemon.ts          # the scheduler loop ("npm start")
 │   └── verify-sheet.ts    # Sheet + tracker self-test
 ├── core/          # Pure domain logic
@@ -38,8 +89,7 @@ src/
 │   ├── analyze.ts
 │   ├── score.ts
 │   ├── dedup.ts
-│   ├── profile.ts
-│   └── queries.ts         # derive SerpApi queries from a fit_profile
+│   └── profile.ts         # normalize the fit_profile read from config.json
 ├── config.ts
 ├── pricing.ts     # Hardcoded model prices ($/1M tokens)
 └── types.ts
@@ -50,27 +100,21 @@ apps-script/Code.gs   # Google Sheets bridge — deploy as a Web App
 
 ## Quick start (Docker)
 
-You'll need: Docker, a SerpApi key, an OpenAI key, a Google account, and your resume as PDF or TXT.
+You'll need: Docker, a SerpApi key, an OpenAI key, and a Google account.
 
 ```bash
 git clone <this-repo> job-finder
 cd job-finder
 
 cp .env.example .env             # fill in 4 values — see docs/deploy.md §3
-mkdir -p data .data
-cp ~/path/to/your/resume.pdf data/resume.pdf
+cp config.example.json config.json   # then hand-edit queries + profile
+mkdir -p .data
 ```
 
-Then provision the Google Sheet + Apps Script Web App (a one-time step described in [`docs/deploy.md`](docs/deploy.md) §2), build, and run the one-shot bootstrap:
+Provision the Google Sheet + Apps Script Web App (one-time step described in [`docs/deploy.md`](docs/deploy.md) §2), then build and start:
 
 ```bash
 docker compose build
-
-# Bootstrap: reads data/resume.pdf, extracts your fit_profile via OpenAI,
-# derives sensible queries, writes config.json from built-in defaults, exits.
-docker compose run --rm job-finder node dist/cli/bootstrap.js
-
-# Start the daemon:
 docker compose up -d
 docker compose logs -f
 ```
@@ -81,49 +125,29 @@ For end-to-end deployment, Apps Script setup, updating, and troubleshooting, rea
 
 ## Quick start (without Docker)
 
-Prerequisites: Node.js 22+ on the host. Everything else is the same — `.env` and your resume.
+Prerequisites: Node.js 22+ on the host. Everything else is the same — `.env` and `config.json`.
 
 ```bash
 git clone <this-repo> job-finder
 cd job-finder
 
 cp .env.example .env             # fill in 4 values — see docs/deploy.md §3
-mkdir -p data .data
-cp ~/path/to/your/resume.pdf data/resume.pdf
-
-./bootstrap                      # installs deps if needed, runs bootstrap, exits
+cp config.example.json config.json   # then hand-edit queries + profile
+mkdir -p .data
+npm install
 npm start                        # run the daemon loop in this terminal
-```
-
-`./bootstrap` is a thin shell wrapper around `npm run bootstrap`. It checks `.env` exists, runs `npm install` once if `node_modules/` is missing, then hands off to the same `bootstrap.ts` the Docker path uses. Forwards extra args:
-
-```bash
-./bootstrap --force                       # overwrite an existing config.json
-./bootstrap path/to/specific/resume.pdf   # explicit path instead of auto-detect
 ```
 
 For long-running operation you'll want a process manager (`pm2`, `systemd`, `tmux`, etc.) — `npm start` runs in the foreground.
 
-## Bootstrap details
+## Configuring `config.json`
 
-`bootstrap` is a one-shot setup command:
+Copy `config.example.json` to `config.json` and edit by hand. The two sections that actually need your input are:
 
-1. Validates the four required env vars (`APPS_SCRIPT_URL`, `APPS_SCRIPT_TOKEN`, `SERPAPI_KEY`, `OPENAI_KEY`).
-2. Auto-detects your resume: looks for `data/resume.pdf`, then `data/resume.txt`, then any single `.pdf`/`.txt` in `data/`.
-3. Calls OpenAI once to extract `fit_profile` (skills, seniority, role titles, locations, …).
-4. Derives 2–3 SerpApi queries from your top role titles × locations — e.g. `"backend engineer remote india"`.
-5. Writes a complete `config.json` from built-in defaults + extracted profile + derived queries.
-6. Refuses to overwrite an existing populated `config.json` unless you pass `--force`.
+- **`cycle.queries`** — the SerpApi Google Jobs search strings (e.g. `"backend engineer remote india"`, `"backend engineer bengaluru"`).
+- **`profile`** — your fit profile: `skills`, `seniority`, `role_titles`, `locations`, etc. The scorer injects this into the LLM prompt; `skills` and `role_titles` must be non-empty. See `config.example.json` for the full schema and per-field hints.
 
-After bootstrap, open `config.json` and hand-edit anything you want different — `queries` are the most likely candidate for tweaks. The daemon re-reads `config.json` every cycle, so edits take effect on the next run with no restart.
-
-Re-run when your resume changes:
-
-```bash
-docker compose run --rm job-finder node dist/cli/bootstrap.js --force
-```
-
-`--force` regenerates `queries` too, so if you've hand-tuned them, copy them out of `config.json` first and paste them back after.
+Everything else has sane defaults — leave it alone unless you have a reason. The daemon re-reads `config.json` every cycle, so edits take effect on the next run with no restart.
 
 ## Configuration reference
 
@@ -132,9 +156,9 @@ docker compose run --rm job-finder node dist/cli/bootstrap.js --force
 | Field | Default | What it controls |
 |---|---|---|
 | `queries` | *(required)* | Array of SerpApi Google Jobs search strings. Cross-query duplicates collapse to one row. |
-| `score_threshold` | `70` | Rows ≥ threshold are "shortlisted" for your attention; the scorer never deletes anything. |
+| `score_threshold` | `70` | Rows ≥ threshold get `status="new"`; below get `status="filtered"`. Nothing is deleted. |
 | `max_pages_per_query` | `1` | Each page = 1 SerpApi search (~10 jobs). Raise carefully — quota burns fast. |
-| `staleness_days` | `14` | Unseen rows older than this flip to `stale`. `applied` rows are never auto-staled. |
+| `max_job_age_days` | `7` | Drop *fresh* postings older than this before analyzing. Known rows are unaffected. |
 | `dedup_strategy` | `"title_company_via"` | Use `"title_company"` to collapse cross-source duplicates (LinkedIn + Naukri → one row). |
 | `poll_interval_seconds` | `86400` | Daemon sleep between cycles. |
 | `monthly_search_cap` | `100` | Daemon refuses to call SerpApi at or above this in the current UTC month. |
@@ -157,9 +181,6 @@ docker compose run --rm job-finder node dist/cli/bootstrap.js --force
 # build (after pulling new code)
 docker compose build
 
-# one-shot setup: extract profile + derive queries + write config.json
-docker compose run --rm job-finder node dist/cli/bootstrap.js [--force]
-
 # run a single cycle (no loop)
 docker compose run --rm job-finder node dist/cli/daemon.js --once
 
@@ -181,9 +202,9 @@ npm run build
 
 These are non-negotiable design rules — see [`CLAUDE.md`](CLAUDE.md):
 
-- The Sheet is the jobs database (job rows only). `.data/` is the local meters & observability store (`cycles.jsonl`, `jobs.jsonl`, `usage-YYYY-MM.json`). No other persistence.
-- `process_cycle` reads Sheet → does work → writes Sheet + appends to `.data/`. Crash-safe via append-only writes.
-- Idempotent via `job_id`. The same posting always hashes to the same id; re-discovery updates `last_seen` in place.
+- The Sheet is the jobs database (job rows only). `.data/` is the local meters & observability store (`cycles.jsonl`, `jobs.jsonl`, `usage-YYYY-MM.json`, `last-cycle.json`). No other persistence.
+- Write-once: the daemon never edits an existing sheet row. Re-discovery of a known `job_id` just emits a `skipped-known` event.
+- Idempotent via `job_id` = `hash(normalized_title + company + via)`.
 - Dedup before LLM. Known `job_id` skips analyze + score; only new postings burn tokens.
 - API-only discovery. No logged-in scraping.
 - Per-posting `try/catch`. One bad posting never aborts a cycle (becomes an `errored` event in `jobs.jsonl`).

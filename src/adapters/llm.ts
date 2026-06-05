@@ -1,5 +1,4 @@
 import {
-  DEFAULT_CHAT_MAX_TOKENS,
   DEFAULT_OPENAI_MODEL,
   OPENAI_API_URL,
   OPENAI_BACKOFF_BASE_MS,
@@ -7,6 +6,7 @@ import {
   OPENAI_MAX_ATTEMPTS,
 } from '../constants';
 import { Logger, logger as rootLogger } from '../logger';
+import { retry } from './retry';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -20,7 +20,7 @@ export interface JsonSchemaSpec {
 
 export interface ChatOptions {
   model?: string;
-  maxTokens?: number;
+  maxTokens: number;
   schema?: JsonSchemaSpec;
   log?: Logger;
 }
@@ -30,17 +30,23 @@ export interface ChatResult {
   tokens: number;
 }
 
+class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
 export async function chat(
   messages: ChatMessage[],
   apiKey: string,
-  opts: ChatOptions = {},
+  opts: ChatOptions,
 ): Promise<ChatResult> {
   const log = opts.log ?? rootLogger;
   const model = opts.model ?? DEFAULT_OPENAI_MODEL;
   const body: Record<string, unknown> = {
     model,
     messages,
-    max_completion_tokens: opts.maxTokens ?? DEFAULT_CHAT_MAX_TOKENS,
+    max_completion_tokens: opts.maxTokens,
   };
   if (opts.schema) {
     body.response_format = {
@@ -49,36 +55,15 @@ export async function chat(
     };
   }
 
-  let lastError: Error | null = null;
-  for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt++) {
-    try {
-      log.debug('OpenAI chat request', { model, attempt, schema: opts.schema?.name });
-      const result = await callOnce(body, apiKey);
-      log.debug('OpenAI chat response', { model, tokens: result.tokens });
-      return result;
-    } catch (err) {
-      const e = err as Error & { status?: number; retriable?: boolean };
-      lastError = e;
-      if (!e.retriable || attempt === OPENAI_MAX_ATTEMPTS) {
-        log.error('OpenAI request failed (non-retryable or attempts exhausted)', {
-          attempt,
-          status: e.status,
-          err: e,
-        });
-        throw e;
-      }
-      const delay = Math.min(OPENAI_BACKOFF_BASE_MS * 2 ** (attempt - 1), OPENAI_BACKOFF_MAX_MS);
-      log.warn('OpenAI request failed; retrying', {
-        attempt,
-        max_attempts: OPENAI_MAX_ATTEMPTS,
-        status: e.status,
-        delay_ms: delay,
-        err_message: e.message,
-      });
-      await sleep(delay);
-    }
-  }
-  throw lastError ?? new Error('OpenAI call failed with no recorded error');
+  return retry(() => callOnce(body, apiKey), {
+    label: 'OpenAI chat',
+    maxAttempts: OPENAI_MAX_ATTEMPTS,
+    backoffBaseMs: OPENAI_BACKOFF_BASE_MS,
+    backoffMaxMs: OPENAI_BACKOFF_MAX_MS,
+    shouldRetry: (err) =>
+      err instanceof HttpError ? err.status === 429 || err.status >= 500 : true,
+    log,
+  });
 }
 
 async function callOnce(body: Record<string, unknown>, apiKey: string): Promise<ChatResult> {
@@ -89,17 +74,12 @@ async function callOnce(body: Record<string, unknown>, apiKey: string): Promise<
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    const error = new Error(`OpenAI HTTP ${res.status}: ${text.slice(0, 200)}`) as Error & {
-      status: number;
-      retriable: boolean;
-    };
-    error.status = res.status;
-    error.retriable = res.status === 429 || res.status >= 500;
-    throw error;
+    throw new HttpError(res.status, `OpenAI HTTP ${res.status}: ${text.slice(0, 200)}`);
   }
 
   const data = (await res.json()) as {
@@ -110,8 +90,4 @@ async function callOnce(body: Record<string, unknown>, apiKey: string): Promise<
     text: data.choices[0]?.message?.content ?? '',
     tokens: data.usage?.total_tokens ?? 0,
   };
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

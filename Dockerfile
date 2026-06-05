@@ -15,4 +15,4 @@ ENV TZ=UTC
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/dist ./dist
-CMD ["node", "dist/cli/daemon.js"]
+CMD ["node", "dist/cli/daemon.js", "/app/config.json"]

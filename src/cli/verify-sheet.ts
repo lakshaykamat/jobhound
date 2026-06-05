@@ -84,7 +84,6 @@ async function main(): Promise<void> {
         filtered: 0,
         inserted: 0,
         updated: 0,
-        stale: 0,
         errored: 0,
       });
       const usage = await tracker.monthlyUsage();

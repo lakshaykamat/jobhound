@@ -1,4 +1,5 @@
 import { JsonSchemaSpec } from './adapters/llm';
+import { DESCRIPTION_MAX_CHARS } from './constants';
 import { FitProfile, JobRecord, RawPosting } from './types';
 
 // =====================================================================
@@ -27,11 +28,11 @@ Infer from the description's stated experience requirement and scope expectation
 
 Pick the closest single value. Do not split across categories. Prefer null over a low-confidence guess.`;
 
-export function buildAnalyzePrompt(posting: RawPosting, descriptionMaxChars: number): string {
+export function buildAnalyzePrompt(posting: RawPosting): string {
   const title = posting.title.trim() || '(missing)';
   const description = posting.description.trim();
   const descBlock =
-    description.length > 0 ? description.slice(0, descriptionMaxChars) : '(no description provided)';
+    description.length > 0 ? description.slice(0, DESCRIPTION_MAX_CHARS) : '(no description provided)';
   const location = posting.location.trim();
 
   return `Title: ${title}${location ? `\nLocation: ${location}` : ''}
@@ -169,7 +170,6 @@ export function buildScorePrompt(
   record: JobRecord,
   description: string,
   profile: FitProfile,
-  descriptionMaxChars: number,
 ): string {
   const postedAge = ageInDays(record.posted_date);
   const highlights = profile.highlights?.length
@@ -205,7 +205,7 @@ JOB POSTING
 ─ Source: ${formatString(record.source)}
 
 DESCRIPTION
-${desc.length > 0 ? desc.slice(0, descriptionMaxChars) : '(no description provided)'}
+${desc.length > 0 ? desc.slice(0, DESCRIPTION_MAX_CHARS) : '(no description provided)'}
 
 Score this job across all six axes and produce final_score.`;
 }
@@ -248,125 +248,3 @@ function formatPosted(postedDate: string | null, ageDays: number | null): string
   return `${postedDate} (${ageDays} day${ageDays === 1 ? '' : 's'} ago)`;
 }
 
-// =====================================================================
-// Profile extraction — distill a resume into a fit profile.
-// =====================================================================
-
-export const PROFILE_EXTRACTION_SYSTEM_PROMPT = `You extract a structured candidate profile from a resume. The output is consumed by an automated job-scorer that compares this profile against postings — so completeness, accuracy, and downstream-friendly normalization all matter.
-
-GROUND RULES
-- Extract only what the resume clearly states. Do not infer, embellish, or invent.
-- Every string is lowercase. Every list is deduplicated.
-- Use empty arrays / empty strings / null when a field has no content — never omit a field, never use placeholders like "n/a" or "unknown".
-
-FIELDS
-
-skills — concrete technologies, languages, frameworks, libraries, databases, tools. Short canonical tokens.
-- Include skills from BOTH work experience AND projects AND a dedicated skills section if present.
-- Normalize: "Node.js" → "nodejs", "Next.js" → "nextjs", "React.js" → "react", "PostgreSQL" → "postgres", "Amazon Web Services" → "aws". Drop version numbers.
-- Keep distinct ecosystem entries that the candidate would expect to be matched on independently (e.g. keep "typescript" AND "javascript", "nestjs" AND "nodejs", "react" AND "nextjs").
-- Exclude soft skills, methodologies (agile, scrum), and generic categories ("backend", "databases").
-- Aim for completeness — do not truncate arbitrarily.
-
-seniority — one of "junior" | "mid" | "senior" | "staff" | "principal". Empty string if genuinely unclear.
-- Base it on years AND scope AND explicit past titles.
-- Scope tiebreaker: when years suggest one level but the resume clearly demonstrates the next level up (sole production ownership, multi-service architecture, leading initiatives, measurable impact at scale), pick the higher level.
-- Never downgrade an explicit past title — if the candidate held "senior" formally, the value is at least "senior".
-- Calibration: 0-2y → junior, 2-5y → mid, 5-8y → senior, 8-11y → staff, 11y+ → principal — then apply the scope tiebreaker.
-
-years_experience — integer years of full-time professional experience.
-- Count only post-education paid work.
-- Internships count as 0.5x unless the resume explicitly says full-time.
-- For overlapping roles, count the calendar span once (do not sum).
-- For an in-progress role ("Present"), use elapsed months up to now.
-- null if not derivable.
-
-domains — industries or product areas the candidate has worked in (e.g. "fintech", "saas", "b2b-saas", "healthcare", "developer-tools", "logistics", "gtm-automation", "edtech", "ai-infrastructure").
-- One token per distinct domain. Use hyphenated forms for multi-word domains.
-- Only include domains where the candidate spent meaningful time, not one-off projects.
-
-role_titles — 8 to 12 titles total, used downstream for query generation and role-family matching. Lowercased, normalized, no company names or dates.
-- ALWAYS include every distinct past title the candidate has held (e.g. "software engineer", "backend developer intern", "product research intern").
-- ALSO include adjacent role-family titles the candidate would credibly apply to based on their stack and scope. For a backend-leaning candidate with Node/NestJS/TypeScript/Python/Postgres/Docker/AWS, that means titles like "backend engineer", "backend developer", "nodejs developer", "nestjs developer", "typescript backend engineer", "python backend engineer", "fullstack engineer", "platform engineer", "api engineer". For a frontend-leaning candidate, mirror this with the frontend equivalents. Do NOT pad with senior-level titles the candidate's years/scope don't support (no "staff engineer" for a 2y candidate).
-- The summary line ("backend-focused engineer", "fullstack developer", "platform-leaning generalist") is the primary signal for which role-family to expand into. Pick the family that the resume most clearly demonstrates and expand it; don't expand into multiple unrelated families.
-
-locations — cities, regions, or "remote" the resume mentions as work or residence.
-- Use city names ("new delhi", "berlin"), country names where the candidate is generally available ("india"), or "remote".
-- Include the candidate's current/home city. Include "remote" only if the resume explicitly demonstrates remote work or stated availability.
-- Empty array only if the resume is silent on geography.
-
-work_authorization — list of ISO 3166-1 alpha-2 country codes (lowercase, e.g. "in", "us", "gb", "de") where the candidate has legal work rights without sponsorship. Use only what the resume explicitly states (citizenship, permanent residency, "authorized to work in X", visa status). Empty array if silent.
-
-work_mode_preference — ordered list (most preferred first) drawn from "remote", "hybrid", "onsite". Infer from explicit statements in the resume's summary or work history. If the resume only mentions onsite roles with no preference signal, return empty array.
-
-relocation_open — true only if the resume explicitly says the candidate is open to relocation or willing to move. Otherwise false. Do not infer from the absence of location restrictions.
-
-preferred_company_size — list drawn from "startup", "scaleup", "enterprise". Infer from explicit work history pattern (e.g. 3 consecutive startup roles → ["startup"]; mix of FAANG and series-A → ["scaleup", "enterprise"]). Empty array if the pattern is unclear or single-data-point.
-
-availability — short string describing earliest start (e.g. "immediate", "2 weeks notice", "1 month notice", "after may 2026"). Empty string if not stated.
-
-min_annual_salary — integer only if the resume explicitly states current or target compensation. Use the candidate's local currency (no conversion). Otherwise null.
-
-compensation_currency — ISO 4217 currency code (lowercase, e.g. "inr", "usd", "eur") matching min_annual_salary. Null if min_annual_salary is null.
-
-highlights — 3-7 concise achievements with measurable impact or notable scope.
-- Pick the strongest items if the resume contains more than 7 — quality over count.
-- Each item: imperative or past-tense verb-led phrase with a metric, scope, or named system. Examples: "scaled api to 10k rps", "led migration from monolith to services", "owns groovo gtm platform end-to-end", "cut p95 query time from 800ms to 200ms".
-- Strip personal pronouns and company names; keep numbers and named systems.
-- Do not pad with weak items. Empty array if the resume has no distinct achievements.
-
-notes — at most one short sentence summarizing anything distinctive the other fields don't capture.
-- Prioritize downstream-relevant context: location/work-mode preferences (e.g. "india-based, open to remote"), role-family orientation (e.g. "backend-leaning generalist"), founder background, open-source maintenance, domain crossover.
-- Empty string if nothing notable beyond what other fields already encode.`;
-
-export function buildProfileExtractionPrompt(resumeText: string): string {
-  return `RESUME:\n${resumeText}`;
-}
-
-export const PROFILE_EXTRACTION_SCHEMA: JsonSchemaSpec = {
-  name: 'fit_profile',
-  schema: {
-    type: 'object',
-    additionalProperties: false,
-    required: [
-      'skills',
-      'seniority',
-      'years_experience',
-      'domains',
-      'role_titles',
-      'locations',
-      'work_authorization',
-      'work_mode_preference',
-      'relocation_open',
-      'preferred_company_size',
-      'availability',
-      'min_annual_salary',
-      'compensation_currency',
-      'highlights',
-      'notes',
-    ],
-    properties: {
-      skills: { type: 'array', items: { type: 'string' } },
-      seniority: { type: 'string', enum: ['', 'junior', 'mid', 'senior', 'staff', 'principal'] },
-      years_experience: { type: ['integer', 'null'] },
-      domains: { type: 'array', items: { type: 'string' } },
-      role_titles: { type: 'array', items: { type: 'string' } },
-      locations: { type: 'array', items: { type: 'string' } },
-      work_authorization: { type: 'array', items: { type: 'string' } },
-      work_mode_preference: {
-        type: 'array',
-        items: { type: 'string', enum: ['remote', 'hybrid', 'onsite'] },
-      },
-      relocation_open: { type: 'boolean' },
-      preferred_company_size: {
-        type: 'array',
-        items: { type: 'string', enum: ['startup', 'scaleup', 'enterprise'] },
-      },
-      availability: { type: 'string' },
-      min_annual_salary: { type: ['integer', 'null'] },
-      compensation_currency: { type: ['string', 'null'] },
-      highlights: { type: 'array', items: { type: 'string' } },
-      notes: { type: 'string' },
-    },
-  },
-};

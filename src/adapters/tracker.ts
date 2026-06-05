@@ -24,7 +24,6 @@ export interface CycleRecord {
   filtered: number;
   inserted: number;
   updated: number;
-  stale: number;
   errored: number;
 }
 
@@ -57,7 +56,6 @@ export class Tracker {
   constructor(private dataDir: string) {}
 
   async recordCycle(cycle: CycleRecord): Promise<MonthlyUsage> {
-    await this.flushJobEvents();
     await this.appendJsonl('cycles.jsonl', [cycle]);
     return this.bumpMonthlyUsage(cycle);
   }
@@ -141,7 +139,9 @@ export class Tracker {
 
   private async writeJson(file: string, payload: unknown): Promise<void> {
     await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    const tmp = `${file}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    await fs.rename(tmp, file);
   }
 
   private usageFile(month: string): string {
@@ -163,7 +163,6 @@ export function makeCycleRecord(
     filtered: number;
     inserted: number;
     updated: number;
-    stale: number;
     errored: number;
   },
 ): CycleRecord {
@@ -181,7 +180,6 @@ export function makeCycleRecord(
     filtered: summary.filtered,
     inserted: summary.inserted,
     updated: summary.updated,
-    stale: summary.stale,
     errored: summary.errored,
   };
 }

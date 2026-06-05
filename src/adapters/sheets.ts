@@ -6,6 +6,15 @@ import {
 } from '../constants';
 import { logger } from '../logger';
 import { JobRecord, SelfTestStep } from '../types';
+import { retry } from './retry';
+
+class AppsScriptHttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+class AppsScriptHtmlError extends Error {}
 
 type Action =
   | 'ensureHeader'
@@ -68,99 +77,48 @@ export class JobsSheet {
   }
 
   private async call<T>(envelope: Envelope): Promise<T> {
-    const recordCount = envelope.records?.length;
-    logger.debug('apps-script request', { action: envelope.action, records: recordCount });
+    logger.debug('apps-script request', { action: envelope.action, records: envelope.records?.length });
     const payload = JSON.stringify({ token: this.token, ...envelope });
 
-    for (let attempt = 1; attempt <= APPS_SCRIPT_MAX_ATTEMPTS; attempt++) {
-      const started = Date.now();
-      try {
-        const res = await fetch(this.webAppUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          redirect: 'follow',
-        });
-        const body = await res.text();
-        const duration_ms = Date.now() - started;
-
-        if (!res.ok) {
-          const retriable = res.status === 429 || res.status >= 500 || looksLikeHtml(body);
-          if (retriable && attempt < APPS_SCRIPT_MAX_ATTEMPTS) {
-            await backoff('http', res.status, attempt, envelope.action, body);
-            continue;
-          }
-          logger.error('apps-script HTTP error', {
-            action: envelope.action,
-            status: res.status,
-            attempt,
-            duration_ms,
-            body_preview: body.slice(0, 200),
-          });
-          throw new Error(`Apps Script HTTP ${res.status}: ${summarize(body)}`);
-        }
-
-        if (looksLikeHtml(body)) {
-          if (attempt < APPS_SCRIPT_MAX_ATTEMPTS) {
-            await backoff('html', res.status, attempt, envelope.action, body);
-            continue;
-          }
-          logger.error('apps-script returned HTML after retries', { action: envelope.action });
-          throw new Error(
-            'Apps Script returned an HTML page instead of JSON. ' +
-              'Likely cause: the Web App is deployed with restricted access. ' +
-              'Re-deploy with "Who has access: Anyone" and use the /exec URL.',
-          );
-        }
-
-        const data = JSON.parse(body) as T & { error?: string };
-        if (data.error) {
-          logger.error('apps-script reported error', {
-            action: envelope.action,
-            duration_ms,
-            apps_script_error: data.error,
-          });
-          throw new Error(`Apps Script error: ${data.error}`);
-        }
-        logger.debug('apps-script response ok', {
-          action: envelope.action,
-          attempt,
-          duration_ms,
-        });
-        return data;
-      } catch (err) {
-        if (err instanceof TypeError && attempt < APPS_SCRIPT_MAX_ATTEMPTS) {
-          await backoff('network', 0, attempt, envelope.action, (err as Error).message);
-          continue;
-        }
-        throw err;
-      }
-    }
-    throw new Error('Apps Script call exhausted retries unexpectedly');
+    return retry(() => this.callOnce<T>(envelope, payload), {
+      label: `apps-script ${envelope.action}`,
+      maxAttempts: APPS_SCRIPT_MAX_ATTEMPTS,
+      backoffBaseMs: APPS_SCRIPT_BACKOFF_BASE_MS,
+      backoffMaxMs: APPS_SCRIPT_BACKOFF_MAX_MS,
+      shouldRetry: (err) => {
+        if (err instanceof AppsScriptHtmlError) return true;
+        if (err instanceof AppsScriptHttpError) return err.status === 429 || err.status >= 500;
+        if (err instanceof SyntaxError) return true;
+        return err instanceof TypeError;
+      },
+      log: logger,
+    });
   }
-}
 
-async function backoff(
-  reason: 'http' | 'html' | 'network',
-  status: number,
-  attempt: number,
-  action: string,
-  detail: string,
-): Promise<void> {
-  const delay_ms = Math.min(
-    APPS_SCRIPT_BACKOFF_BASE_MS * 2 ** (attempt - 1),
-    APPS_SCRIPT_BACKOFF_MAX_MS,
-  );
-  logger.warn('apps-script request failed; retrying', {
-    action,
-    reason,
-    status,
-    attempt,
-    max_attempts: APPS_SCRIPT_MAX_ATTEMPTS,
-    delay_ms,
-    detail_preview: detail.slice(0, 120),
-  });
-  await new Promise((r) => setTimeout(r, delay_ms));
+  private async callOnce<T>(envelope: Envelope, payload: string): Promise<T> {
+    const res = await fetch(this.webAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      redirect: 'follow',
+      signal: AbortSignal.timeout(60_000),
+    });
+    const body = await res.text();
+
+    if (!res.ok) {
+      throw new AppsScriptHttpError(res.status, `Apps Script HTTP ${res.status}: ${summarize(body)}`);
+    }
+    if (looksLikeHtml(body)) {
+      throw new AppsScriptHtmlError(
+        'Apps Script returned an HTML page instead of JSON. ' +
+          'Likely cause: the Web App is deployed with restricted access. ' +
+          'Re-deploy with "Who has access: Anyone" and use the /exec URL.',
+      );
+    }
+    const data = JSON.parse(body) as T & { error?: string };
+    if (data.error) throw new Error(`Apps Script error: ${data.error}`);
+    return data;
+  }
 }
 
 function* chunked<T>(items: T[], size: number): Generator<T[]> {

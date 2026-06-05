@@ -9,7 +9,6 @@ export interface IdentifiedPosting {
 export interface DedupSplit {
   fresh: IdentifiedPosting[];
   touch: JobRecord[];
-  seenIds: Set<string>;
 }
 
 export function computeJobId(
@@ -29,26 +28,25 @@ export function splitByKnown(
   strategy: DedupStrategy,
 ): DedupSplit {
   const existingById = new Map(existing.map((r) => [r.job_id, r]));
-  const seenIds = new Set<string>();
-  const now = new Date().toISOString();
+  const seenInCycle = new Set<string>();
 
   const fresh: IdentifiedPosting[] = [];
   const touch: JobRecord[] = [];
 
   for (const posting of postings) {
     const jobId = computeJobId(posting, strategy);
-    if (seenIds.has(jobId)) continue;
-    seenIds.add(jobId);
+    if (seenInCycle.has(jobId)) continue;
+    seenInCycle.add(jobId);
 
     const known = existingById.get(jobId);
     if (known) {
-      touch.push({ ...known, last_seen: now });
+      touch.push(known);
     } else {
       fresh.push({ jobId, posting });
     }
   }
 
-  return { fresh, touch, seenIds };
+  return { fresh, touch };
 }
 
 function normalize(s: string): string {

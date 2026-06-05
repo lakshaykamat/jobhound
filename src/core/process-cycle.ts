@@ -1,5 +1,4 @@
 import { AppConfig } from '../config';
-import { MS_PER_DAY } from '../constants';
 import { JobRecord } from '../types';
 import { JobsSheet } from '../adapters/sheets';
 import { findJobs } from '../adapters/serpapi';
@@ -7,6 +6,7 @@ import { Tracker } from '../adapters/tracker';
 import { costUsd } from '../pricing';
 import { IdentifiedPosting, splitByKnown } from './dedup';
 import { analyzePosting } from './analyze';
+import { ageInDaysFromIso, parsePostedAt } from './posted-at';
 import { scoreJob } from './score';
 import { Logger, logger as rootLogger } from '../logger';
 
@@ -24,7 +24,6 @@ export interface CycleSummary {
   filtered: number;
   inserted: number;
   updated: number;
-  stale: number;
   errored: number;
   llmTokens: number;
 }
@@ -62,17 +61,15 @@ export async function processCycle(
     config.cycle.max_pages_per_query,
     secrets.serpapi,
     config.serpapi,
-    {
-      platforms: config.serpapi.platforms,
-      maxAgeDays: config.cycle.max_job_age_days,
-    },
+    { platforms: config.serpapi.platforms },
     log,
   );
   log.info('discovery complete', {
     searches_used: find.searchesUsed,
     raw_postings: find.postings.length,
     dropped_by_platform: find.filteredByPlatform,
-    dropped_by_age: find.filteredByAge,
+    queries_failed: find.queriesFailed,
+    quota_exhausted: find.quotaExhausted,
   });
 
   const split = splitByKnown(find.postings, existing, config.cycle.dedup_strategy);
@@ -82,28 +79,33 @@ export async function processCycle(
     dedup_strategy: config.cycle.dedup_strategy,
   });
 
-  emitFoundEvents(tracker, cycleId, split.fresh, log);
+  // Age filter applies ONLY to fresh postings — we don't pick up a new-to-us
+  // job that's already too old to be worth analyzing.
+  const freshAgeFiltered = filterFreshByAge(split.fresh, config.cycle.max_job_age_days);
+  if (freshAgeFiltered.dropped > 0) {
+    log.info('age filter dropped fresh postings', {
+      dropped: freshAgeFiltered.dropped,
+      max_job_age_days: config.cycle.max_job_age_days,
+    });
+  }
+
+  emitFoundEvents(tracker, cycleId, freshAgeFiltered.kept, log);
   emitSkippedEvents(tracker, cycleId, split.touch, log);
 
-  const freshCapped = capFreshIntake(
-    split.fresh,
-    config.cycle.max_jobs_per_hour,
-    config.daemon.poll_interval_seconds,
-    log,
-  );
-
   log.info('processing fresh postings', {
-    count: freshCapped.length,
+    count: freshAgeFiltered.kept.length,
     llm_concurrency: config.openai.llm_concurrency,
   });
-  const processed = await runWithConcurrency(freshCapped, config.openai.llm_concurrency, (item) =>
-    processOnePosting(item, config, secrets, tracker, cycleId, log),
+  const processed = await runWithConcurrency(
+    freshAgeFiltered.kept,
+    config.openai.llm_concurrency,
+    (item) => processOnePosting(item, config, secrets, tracker, cycleId, log),
   );
 
   let llmTokens = 0;
   let errored = 0;
   let filtered = 0;
-  const upsertRecords: JobRecord[] = [...split.touch];
+  const upsertRecords: JobRecord[] = [];
   for (const p of processed) {
     llmTokens += p.tokens;
     if (p.errored) errored++;
@@ -115,26 +117,15 @@ export async function processCycle(
   const written = await sheet.upsertBatch(upsertRecords);
   log.info('upsert complete', { inserted: written.inserted, updated: written.updated });
 
-  const staleRows = markStale(existing, split.seenIds, config.cycle.staleness_days);
-  let staleWritten = { inserted: 0, updated: 0 };
-  if (staleRows.length > 0) {
-    log.info('marking stale rows', { count: staleRows.length, staleness_days: config.cycle.staleness_days });
-    staleWritten = await sheet.upsertBatch(staleRows);
-    log.info('stale write complete', { updated: staleWritten.updated });
-  } else {
-    log.debug('no stale rows to mark');
-  }
-
   return {
     searchesUsed: find.searchesUsed,
     found: find.postings.length,
     new: split.fresh.length,
     known: split.touch.length,
-    scored: processed.length - errored,
+    scored: processed.length - errored - filtered,
     filtered,
-    inserted: written.inserted + staleWritten.inserted,
-    updated: written.updated + staleWritten.updated,
-    stale: staleRows.length,
+    inserted: written.inserted,
+    updated: written.updated,
     errored,
     llmTokens,
   };
@@ -165,7 +156,6 @@ async function processOnePosting(
       posting,
       secrets.openai,
       config.openai,
-      config.extraction,
       log,
     );
     tokens += analyzed.tokens;
@@ -199,7 +189,6 @@ async function processOnePosting(
       config.profile,
       secrets.openai,
       config.openai,
-      config.extraction,
       config.scoring,
       log,
     );
@@ -293,11 +282,29 @@ function handleFailure(
   };
 
   return {
-    record: { ...record, rationale: `errored: ${msg.slice(0, 200)}`, status: 'filtered' },
+    record: { ...record, rationale: `errored: ${msg.slice(0, 200)}` },
     tokens,
     belowThreshold: false,
     errored: true,
   };
+}
+
+function filterFreshByAge(
+  fresh: IdentifiedPosting[],
+  maxAgeDays: number | null | undefined,
+): { kept: IdentifiedPosting[]; dropped: number } {
+  if (maxAgeDays == null) return { kept: fresh, dropped: 0 };
+  const kept: IdentifiedPosting[] = [];
+  let dropped = 0;
+  for (const item of fresh) {
+    const iso = parsePostedAt(item.posting.posted_at);
+    const age = ageInDaysFromIso(iso);
+    // Unknown age (null) is kept — lenient: better to score and let recency
+    // weighting handle it than to silently drop fresh-looking postings.
+    if (age != null && age > maxAgeDays) dropped++;
+    else kept.push(item);
+  }
+  return { kept, dropped };
 }
 
 function emitFoundEvents(tracker: Tracker, cycleId: string, fresh: IdentifiedPosting[], log: Logger): void {
@@ -348,37 +355,6 @@ async function runWithConcurrency<T, R>(
   });
   await Promise.all(runners);
   return results;
-}
-
-function capFreshIntake(
-  fresh: IdentifiedPosting[],
-  maxPerHour: number,
-  pollSeconds: number,
-  log: Logger,
-): IdentifiedPosting[] {
-  const hours = Math.max(1, Math.floor(pollSeconds / 3600));
-  const cap = maxPerHour * hours;
-  if (fresh.length <= cap) return fresh;
-  log.warn('intake cap applied', {
-    fresh_before: fresh.length,
-    fresh_after: cap,
-    max_per_hour: maxPerHour,
-    hours,
-  });
-  return fresh.slice(0, cap);
-}
-
-function markStale(existing: JobRecord[], seenIds: Set<string>, stalenessDays: number): JobRecord[] {
-  const cutoff = Date.now() - stalenessDays * MS_PER_DAY;
-  const out: JobRecord[] = [];
-  for (const row of existing) {
-    if (seenIds.has(row.job_id)) continue;
-    if (row.status !== 'new' && row.status !== 'reviewed') continue;
-    const lastSeenMs = Date.parse(row.last_seen);
-    if (!Number.isFinite(lastSeenMs) || lastSeenMs >= cutoff) continue;
-    out.push({ ...row, status: 'stale' });
-  }
-  return out;
 }
 
 function round(n: number, decimals: number): number {

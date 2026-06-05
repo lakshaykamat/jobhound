@@ -1,5 +1,6 @@
-import { ExtractionConfig, OpenAiConfig, ScoringConfig } from '../config';
+import { OpenAiConfig, ScoringConfig } from '../config';
 import { chat } from '../adapters/llm';
+import { SCORE_MAX_TOKENS } from '../constants';
 import { Logger, logger as rootLogger } from '../logger';
 import { FitProfile, JobRecord, ScoreAxis, ScoreBreakdown } from '../types';
 import { SCORE_SCHEMA, SCORE_SYSTEM_PROMPT, buildScorePrompt } from '../prompts';
@@ -27,7 +28,6 @@ export async function scoreJob(
   profile: FitProfile,
   apiKey: string,
   openai: OpenAiConfig,
-  extraction: ExtractionConfig,
   scoring: ScoringConfig,
   log: Logger = rootLogger,
 ): Promise<ScoreResult> {
@@ -36,13 +36,13 @@ export async function scoreJob(
       { role: 'system', content: SCORE_SYSTEM_PROMPT },
       {
         role: 'user',
-        content: buildScorePrompt(record, description, profile, extraction.description_max_chars),
+        content: buildScorePrompt(record, description, profile),
       },
     ],
     apiKey,
     {
       schema: SCORE_SCHEMA,
-      maxTokens: extraction.score_max_tokens,
+      maxTokens: SCORE_MAX_TOKENS,
       model: openai.model,
       log,
     },

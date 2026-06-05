@@ -3,13 +3,13 @@
 **Status:** Draft v0.2
 **Owner:** Lakshay
 **Last updated:** 2026-06-04
-**Changes in v0.2:** Discovery rebuilt around a single job-aggregator API (SerpApi Google Jobs) instead of per-platform scrapers. Added resume-to-profile extraction. Documented coverage limits.
+**Changes in v0.2:** Discovery rebuilt around a single job-aggregator API (SerpApi Google Jobs) instead of per-platform scrapers. Documented coverage limits. Fit profile is hand-written in `config.json` (no resume extraction step).
 
 ---
 
 ## 1. Summary
 
-Job Finder is a stateless background worker that discovers job postings, extracts structured data from each, scores it against a fit profile derived from the operator's resume, and writes the results to a Google Sheet. It runs as a daemon — a long-lived scheduler loop — but holds no durable in-memory state. The Google Sheet is the single source of truth; any run can be killed and restarted without data loss or duplication.
+Job Finder is a stateless background worker that discovers job postings, extracts structured data from each, scores it against a hand-written fit profile in `config.json`, and writes the results to a Google Sheet. It runs as a daemon — a long-lived scheduler loop — but holds no durable in-memory state. The Google Sheet is the single source of truth; any run can be killed and restarted without data loss or duplication.
 
 Discovery uses one aggregator API (SerpApi's Google Jobs endpoint) rather than scraping individual job boards. Google Jobs aggregates Indeed, LinkedIn, Naukri, and thousands of other sources into one query, localized to India. This collapses discovery from eight fragile scrapers to a single API call and keeps the design login-free and stateless.
 
@@ -29,8 +29,7 @@ Job discovery is manual, repetitive, and noisy. Relevant postings are scattered 
 
 - Discover job postings matching configured search queries via the Google Jobs aggregator.
 - Extract a consistent structured record from each posting.
-- Derive the fit profile automatically from an uploaded resume.
-- Score each posting 0–100 against that profile, with a short rationale.
+- Score each posting 0–100 against the operator's hand-written fit profile, with a short rationale.
 - Persist results to Google Sheets, deduplicated and idempotent across runs.
 - Run unattended as a daemon with no manual intervention between cycles.
 
@@ -38,14 +37,14 @@ Job discovery is manual, repetitive, and noisy. Relevant postings are scattered 
 
 - No application submission or auto-apply. The tool surfaces, it does not act.
 - No per-platform scraping, no logged-in sessions, no headless browser for auth. Discovery is API-only.
-- No user accounts or multi-tenant support. Single operator, single resume/profile per deployment.
+- No user accounts or multi-tenant support. Single operator, single profile per deployment.
 - No internal database or persistent cache. State lives in the Sheet, full stop.
 
 ---
 
 ## 4. Users
 
-A single operator (a job seeker) who uploads a resume once, sets a few search queries, runs the daemon, and reads the resulting Sheet. The Sheet doubles as the interface — readable and filterable by a non-technical person.
+A single operator (a job seeker) who writes a fit profile and a few search queries into `config.json`, runs the daemon, and reads the resulting Sheet. The Sheet doubles as the interface — readable and filterable by a non-technical person.
 
 ---
 
@@ -85,14 +84,13 @@ Given a set of search queries, return candidate postings for the current cycle f
 - Each result yields: title, company, location, posting source (`via`, e.g. LinkedIn/Indeed/Naukri), apply link, description, and salary/schedule when the source published it.
 - Find must back off and retry on API errors rather than hammering, and respect the monthly search quota (see §10).
 
-### 6.2 Profile (resume-derived, one-time)
+### 6.2 Profile (hand-written in config.json)
 
-The fit profile is generated from the operator's resume, not hand-written.
+The fit profile lives in `config.json` under the `profile` key. The operator writes it once by hand (using `config.example.json` as a template) and edits it as preferences change.
 
-- Operator uploads a resume once (PDF or text).
-- An LLM extracts a structured profile: skills, seniority, years of experience, domains, role titles, location/remote preference, and inferred comp band.
-- The extracted profile is stored in config (e.g. a dedicated tab in the Sheet or a config file) and reused every cycle. It is regenerated only when the operator re-uploads a resume.
-- The operator may override or tweak any extracted field — extraction is the starting point, not a lock.
+- Schema: `skills`, `seniority`, `years_experience`, `domains`, `role_titles`, `locations`, `work_authorization`, `work_mode_preference`, `relocation_open`, `preferred_company_size`, `availability`, `min_annual_salary`, `compensation_currency`, `highlights`, `notes`. See `src/types.ts` (`FitProfile`) for the authoritative type.
+- The profile is normalized at config load (lowercase, deduped) and injected into the Score prompt every cycle.
+- Edits take effect on the next cycle — config is re-read each run.
 
 ### 6.3 Analyze
 
@@ -104,7 +102,7 @@ Given a raw posting, normalize it into the record schema (§9).
 
 ### 6.4 Score
 
-Given a structured record and the resume-derived profile, produce a `score` (0–100) and a one-to-two-sentence `rationale`.
+Given a structured record and the operator's fit profile, produce a `score` (0–100) and a one-to-two-sentence `rationale`.
 
 - **Dedup before scoring.** The worker checks `job_id` against existing rows *first*. A known job is never re-scored; it gets a cheap in-place `last_seen` update. Only genuinely new jobs reach the LLM scorer. This is the main cost control.
 - The scorer is **strict by default** — bias toward lower scores, penalize vague or mismatched postings, and never invent qualifications the posting doesn't state.
@@ -147,15 +145,14 @@ queries:
   - "nestjs developer"
 poll_interval_seconds: 86400      # once a day keeps free-tier usage low
 score_threshold: 70               # rows >= threshold flagged for attention
-resume_path: "resume.pdf"         # source for the derived profile
-fit_profile:                      # auto-extracted from resume; operator-editable
+fit_profile:                      # hand-written by the operator
   skills: []
   seniority: ""
   comp_floor: null
   locations: ["remote", "delhi ncr"]
 ```
 
-The `fit_profile` is populated by the resume extraction step and injected into the scoring prompt. Config is re-read at the start of each cycle (cheap, given statelessness), so query or profile changes take effect on the next run with no redeploy.
+The `fit_profile` is hand-written in `config.json` and injected into the scoring prompt. Config is re-read at the start of each cycle (cheap, given statelessness), so query or profile changes take effect on the next run with no redeploy.
 
 ---
 
@@ -222,6 +219,5 @@ One row per job. The sheet is the schema.
 ## 13. Milestones
 
 1. **M1 — Core pipeline.** `process_cycle` end-to-end: one SerpApi query → normalize → score → upsert to Sheet with dedup. Manual run.
-2. **M2 — Resume profile.** Resume upload → LLM profile extraction → injected into scorer.
-3. **M3 — Daemonize.** Scheduler loop, clean shutdown, config-driven, quota tracking, logging of both cost meters.
-4. **M4 — Hardening.** Multi-query, pagination knob, staleness rules, cross-source dedup decision, calibration check.
+2. **M2 — Daemonize.** Scheduler loop, clean shutdown, config-driven, quota tracking, logging of all cost meters.
+3. **M3 — Hardening.** Multi-query, pagination knob, staleness rules, cross-source dedup decision, calibration check.

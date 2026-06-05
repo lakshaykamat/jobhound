@@ -1,41 +1,7 @@
 import { CompanySize, FitProfile, WorkModePreference } from '../types';
-import { chat } from '../adapters/llm';
-import { ExtractionConfig, OpenAiConfig } from '../config';
-import {
-  PROFILE_EXTRACTION_SCHEMA,
-  PROFILE_EXTRACTION_SYSTEM_PROMPT,
-  buildProfileExtractionPrompt,
-} from '../prompts';
 
 const VALID_WORK_MODE_PREFS: WorkModePreference[] = ['remote', 'hybrid', 'onsite'];
 const VALID_COMPANY_SIZES: CompanySize[] = ['startup', 'scaleup', 'enterprise'];
-
-export async function extractProfile(
-  resumeText: string,
-  apiKey: string,
-  openai: OpenAiConfig,
-  extraction: ExtractionConfig,
-): Promise<FitProfile> {
-  const result = await chat(
-    [
-      { role: 'system', content: PROFILE_EXTRACTION_SYSTEM_PROMPT },
-      { role: 'user', content: buildProfileExtractionPrompt(resumeText) },
-    ],
-    apiKey,
-    {
-      schema: PROFILE_EXTRACTION_SCHEMA,
-      maxTokens: extraction.profile_extraction_max_tokens,
-      model: openai.model,
-    },
-  );
-  return parseProfile(result.text);
-}
-
-function parseProfile(text: string): FitProfile {
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('extractor returned no JSON');
-  return normalizeProfile(JSON.parse(match[0]) as Record<string, unknown>);
-}
 
 export function normalizeProfile(obj: Record<string, unknown>): FitProfile {
   return {
@@ -101,17 +67,4 @@ function nonNegInt(v: unknown): number | null {
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) return null;
   return Math.floor(n);
-}
-
-export function profileHasContent(p: FitProfile): boolean {
-  return (
-    (p.skills?.length ?? 0) > 0 ||
-    (p.role_titles?.length ?? 0) > 0 ||
-    (p.domains?.length ?? 0) > 0 ||
-    (p.locations?.length ?? 0) > 0 ||
-    !!p.seniority ||
-    p.years_experience != null ||
-    p.min_annual_salary != null ||
-    !!p.notes
-  );
 }

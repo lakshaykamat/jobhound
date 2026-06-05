@@ -1,31 +1,20 @@
 import { readFileSync } from 'fs';
 import { logger } from './logger';
 import {
-  DEFAULT_ANALYZE_MAX_TOKENS,
-  DEFAULT_CHAT_MAX_TOKENS,
   DEFAULT_DEALBREAKER_SCORE_CAP,
   DEFAULT_DEDUP_STRATEGY,
-  DEFAULT_DESCRIPTION_MAX_CHARS,
   DEFAULT_LLM_CONCURRENCY,
   DEFAULT_MAX_JOB_AGE_DAYS,
-  DEFAULT_MAX_JOBS_PER_HOUR,
   DEFAULT_MAX_PAGES_PER_QUERY,
-  DEFAULT_MONTHLY_SEARCH_CAP,
   DEFAULT_OPENAI_MODEL,
   DEFAULT_POLL_INTERVAL_SECONDS,
-  DEFAULT_PROFILE_EXTRACTION_MAX_TOKENS,
   DEFAULT_RECENCY_DECAY_DAYS,
   DEFAULT_RECENCY_FULL_DAYS,
-  DEFAULT_RESUME_MAX_CHARS,
   DEFAULT_SCORE_AXIS_WEIGHTS,
-  DEFAULT_SCORE_MAX_TOKENS,
   DEFAULT_SCORE_THRESHOLD,
-  DEFAULT_SEARCH_WARN_THRESHOLD,
-  DEFAULT_SERPAPI_CHIPS,
   DEFAULT_SERPAPI_COUNTRY,
   DEFAULT_SERPAPI_LANGUAGE,
   DEFAULT_SERPAPI_PLATFORMS,
-  DEFAULT_STALENESS_DAYS,
 } from './constants';
 import { normalizeProfile } from './core/profile';
 import { DedupStrategy, FitProfile, ScoreAxis } from './types';
@@ -34,16 +23,12 @@ export interface CycleConfig {
   queries: string[];
   score_threshold: number;
   max_pages_per_query: number;
-  staleness_days: number;
   dedup_strategy: DedupStrategy;
-  max_jobs_per_hour: number;
   max_job_age_days: number;
 }
 
 export interface DaemonConfig {
   poll_interval_seconds: number;
-  monthly_search_cap: number;
-  search_warn_threshold: number;
 }
 
 export interface SerpApiConfig {
@@ -51,24 +36,11 @@ export interface SerpApiConfig {
   language: string;
   /** Whitelist matched against each posting's `via` field (case-insensitive substring). Empty array = no filter (accept all platforms). */
   platforms: string[];
-  /** Geographic origin of the search (e.g. "Bengaluru, Karnataka, India"). Undefined/empty = Google picks based on country. */
-  location?: string;
-  /** SerpApi/Google Jobs chip filter (e.g. "date_posted:week", "employment_type:fulltime"). Empty = no chip filter. */
-  chips?: string;
 }
 
 export interface OpenAiConfig {
   model: string;
   llm_concurrency: number;
-}
-
-export interface ExtractionConfig {
-  resume_max_chars: number;
-  description_max_chars: number;
-  chat_max_tokens: number;
-  analyze_max_tokens: number;
-  score_max_tokens: number;
-  profile_extraction_max_tokens: number;
 }
 
 export type AxisWeights = Record<ScoreAxis, number>;
@@ -85,7 +57,6 @@ export interface AppConfig {
   daemon: DaemonConfig;
   serpapi: SerpApiConfig;
   openai: OpenAiConfig;
-  extraction: ExtractionConfig;
   scoring: ScoringConfig;
   profile: FitProfile;
 }
@@ -95,7 +66,6 @@ interface ConfigFile {
   daemon?: Partial<DaemonConfig>;
   serpapi?: Partial<SerpApiConfig>;
   openai?: Partial<OpenAiConfig>;
-  extraction?: Partial<ExtractionConfig>;
   scoring?: Partial<ScoringConfig>;
   profile?: Record<string, unknown>;
 }
@@ -116,15 +86,11 @@ function buildConfig(raw: ConfigFile): AppConfig {
       queries: normalizeQueries(raw.cycle),
       score_threshold: normalizeScoreThreshold(raw.cycle?.score_threshold),
       max_pages_per_query: raw.cycle?.max_pages_per_query ?? DEFAULT_MAX_PAGES_PER_QUERY,
-      staleness_days: raw.cycle?.staleness_days ?? DEFAULT_STALENESS_DAYS,
       dedup_strategy: raw.cycle?.dedup_strategy ?? DEFAULT_DEDUP_STRATEGY,
-      max_jobs_per_hour: raw.cycle?.max_jobs_per_hour ?? DEFAULT_MAX_JOBS_PER_HOUR,
       max_job_age_days: raw.cycle?.max_job_age_days ?? DEFAULT_MAX_JOB_AGE_DAYS,
     },
     daemon: {
       poll_interval_seconds: raw.daemon?.poll_interval_seconds ?? DEFAULT_POLL_INTERVAL_SECONDS,
-      monthly_search_cap: raw.daemon?.monthly_search_cap ?? DEFAULT_MONTHLY_SEARCH_CAP,
-      search_warn_threshold: raw.daemon?.search_warn_threshold ?? DEFAULT_SEARCH_WARN_THRESHOLD,
     },
     serpapi: {
       country: raw.serpapi?.country ?? DEFAULT_SERPAPI_COUNTRY,
@@ -136,25 +102,10 @@ function buildConfig(raw: ConfigFile): AppConfig {
           : Array.isArray(raw.serpapi.platforms)
             ? raw.serpapi.platforms.map((p) => String(p).trim().toLowerCase()).filter(Boolean)
             : [...DEFAULT_SERPAPI_PLATFORMS],
-      location: normalizeOptionalString(raw.serpapi?.location),
-      // Explicit "" disables the default chip filter; omitted → use default.
-      chips:
-        raw.serpapi?.chips === undefined
-          ? DEFAULT_SERPAPI_CHIPS || undefined
-          : normalizeOptionalString(raw.serpapi.chips),
     },
     openai: {
       model: raw.openai?.model ?? DEFAULT_OPENAI_MODEL,
       llm_concurrency: raw.openai?.llm_concurrency ?? DEFAULT_LLM_CONCURRENCY,
-    },
-    extraction: {
-      resume_max_chars: raw.extraction?.resume_max_chars ?? DEFAULT_RESUME_MAX_CHARS,
-      description_max_chars: raw.extraction?.description_max_chars ?? DEFAULT_DESCRIPTION_MAX_CHARS,
-      chat_max_tokens: raw.extraction?.chat_max_tokens ?? DEFAULT_CHAT_MAX_TOKENS,
-      analyze_max_tokens: raw.extraction?.analyze_max_tokens ?? DEFAULT_ANALYZE_MAX_TOKENS,
-      score_max_tokens: raw.extraction?.score_max_tokens ?? DEFAULT_SCORE_MAX_TOKENS,
-      profile_extraction_max_tokens:
-        raw.extraction?.profile_extraction_max_tokens ?? DEFAULT_PROFILE_EXTRACTION_MAX_TOKENS,
     },
     scoring: {
       axis_weights: normalizeAxisWeights(raw.scoring?.axis_weights),
@@ -173,20 +124,11 @@ export function validateConfig(cfg: AppConfig): void {
   // cycle
   if (cfg.cycle.queries.length === 0) errs.push('cycle.queries must be non-empty');
   if (cfg.cycle.max_pages_per_query < 1) errs.push('cycle.max_pages_per_query must be >= 1');
-  if (cfg.cycle.staleness_days < 0) errs.push('cycle.staleness_days must be >= 0');
-  if (cfg.cycle.max_jobs_per_hour < 1) errs.push('cycle.max_jobs_per_hour must be >= 1');
   if (cfg.cycle.max_job_age_days < 0) errs.push('cycle.max_job_age_days must be >= 0');
 
   // daemon
   if (cfg.daemon.poll_interval_seconds < 60) {
     errs.push('daemon.poll_interval_seconds must be >= 60 (one minute)');
-  }
-  if (cfg.daemon.monthly_search_cap < 1) errs.push('daemon.monthly_search_cap must be >= 1');
-  if (cfg.daemon.search_warn_threshold < 0) {
-    errs.push('daemon.search_warn_threshold must be >= 0');
-  }
-  if (cfg.daemon.search_warn_threshold > cfg.daemon.monthly_search_cap) {
-    errs.push('daemon.search_warn_threshold cannot exceed daemon.monthly_search_cap');
   }
 
   // serpapi
@@ -201,31 +143,12 @@ export function validateConfig(cfg: AppConfig): void {
   if (!cfg.openai.model) errs.push('openai.model must be a non-empty string');
   if (cfg.openai.llm_concurrency < 1) errs.push('openai.llm_concurrency must be >= 1');
 
-  // extraction
-  for (const [k, v] of Object.entries(cfg.extraction)) {
-    if (typeof v !== 'number' || v < 1) errs.push(`extraction.${k} must be a positive number`);
-  }
-
   // scoring
   if (cfg.scoring.recency_full_days >= cfg.scoring.recency_decay_days) {
     errs.push('scoring.recency_full_days must be < scoring.recency_decay_days');
   }
   if (cfg.scoring.dealbreaker_score_cap < 0 || cfg.scoring.dealbreaker_score_cap > 100) {
     errs.push('scoring.dealbreaker_score_cap must be in [0, 100]');
-  }
-
-  // budget warning (not an error — just surface it)
-  const cyclesPerMonth = Math.floor((30 * 86400) / cfg.daemon.poll_interval_seconds);
-  const searchesPerMonth = cyclesPerMonth * cfg.cycle.queries.length * cfg.cycle.max_pages_per_query;
-  if (searchesPerMonth > cfg.daemon.monthly_search_cap) {
-    logger.warn('config budget warning: projected searches exceed monthly cap', {
-      queries: cfg.cycle.queries.length,
-      max_pages_per_query: cfg.cycle.max_pages_per_query,
-      cycles_per_month: cyclesPerMonth,
-      projected_searches: searchesPerMonth,
-      monthly_search_cap: cfg.daemon.monthly_search_cap,
-      hint: 'raise poll_interval_seconds or trim queries',
-    });
   }
 
   // profile sanity
@@ -255,12 +178,6 @@ function normalizeScoreThreshold(value: unknown): number {
     throw new Error(`score_threshold must be a number in [0, 100], got: ${String(value)}`);
   }
   return n;
-}
-
-function normalizeOptionalString(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function normalizeAxisWeights(raw: Partial<AxisWeights> | undefined): AxisWeights {

@@ -62,7 +62,6 @@ export function validateStartup(opts: StartupCheck): StartupResult {
     model: config!.openai.model,
     llm_concurrency: config!.openai.llm_concurrency,
     poll_interval_seconds: config!.daemon.poll_interval_seconds,
-    monthly_search_cap: config!.daemon.monthly_search_cap,
     score_threshold: config!.cycle.score_threshold,
     dedup_strategy: config!.cycle.dedup_strategy,
     platforms: config!.serpapi.platforms.length,

@@ -1,5 +1,5 @@
 export type WorkMode = 'remote' | 'hybrid' | 'onsite' | 'unknown';
-export type JobStatus = 'new' | 'reviewed' | 'applied' | 'stale' | 'filtered';
+export type JobStatus = 'new' | 'reviewed' | 'applied' | 'filtered';
 
 export type ScoreAxis =
   | 'skills_match'

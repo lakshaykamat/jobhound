@@ -1,5 +1,4 @@
 import { SerpApiConfig } from '../config';
-import { ageInDaysFromIso, parsePostedAt } from '../core/posted-at';
 import { Logger, logger as rootLogger } from '../logger';
 import { RawPosting } from '../types';
 import {
@@ -8,6 +7,7 @@ import {
   SERPAPI_MAX_ATTEMPTS,
   SERPAPI_URL,
 } from '../constants';
+import { retry } from './retry';
 
 interface SerpApiResponse {
   jobs_results?: SerpApiJob[];
@@ -35,14 +35,13 @@ export interface FindResult {
   postings: RawPosting[];
   searchesUsed: number;
   filteredByPlatform: number;
-  filteredByAge: number;
+  queriesFailed: number;
+  quotaExhausted: boolean;
 }
 
 export interface FindOptions {
   /** Platform whitelist matched against the posting's `via` field (case-insensitive substring). Empty/undefined = no filter. */
   platforms?: string[];
-  /** Drop postings older than this. Null/undefined = no age filter. Unknown dates pass through. */
-  maxAgeDays?: number | null;
 }
 
 export async function findJobs(
@@ -55,28 +54,43 @@ export async function findJobs(
 ): Promise<FindResult> {
   const all: RawPosting[] = [];
   let searchesUsed = 0;
+  let queriesFailed = 0;
+  let quotaExhausted = false;
 
   for (const query of queries) {
+    if (quotaExhausted) break;
     const qLog = log.child({ query });
     let nextToken: string | undefined;
-    for (let page = 1; page <= maxPagesPerQuery; page++) {
-      qLog.debug('fetching SerpApi page', { page });
-      const data = await fetchPage(query, apiKey, nextToken, serpapi, qLog);
-      if (data.error) {
-        qLog.error('SerpApi returned error payload', { page, serpapi_error: data.error });
-        throw new Error(`SerpApi error on "${query}" p${page}: ${data.error}`);
-      }
-      searchesUsed++;
-      const results = data.jobs_results ?? [];
-      for (const j of results) all.push(toRawPosting(j));
-      qLog.info('SerpApi page fetched', {
-        page,
-        results: results.length,
-        has_next_page: Boolean(data.serpapi_pagination?.next_page_token),
-      });
+    try {
+      for (let page = 1; page <= maxPagesPerQuery; page++) {
+        qLog.debug('fetching SerpApi page', { page });
+        const data = await fetchPage(query, apiKey, nextToken, serpapi, qLog);
+        if (data.error) {
+          if (isQuotaExhausted(data.error)) {
+            qLog.error('SerpApi quota exhausted; stopping discovery', {
+              page,
+              serpapi_error: data.error,
+            });
+            quotaExhausted = true;
+            break;
+          }
+          throw new Error(`SerpApi error payload on p${page}: ${data.error}`);
+        }
+        searchesUsed++;
+        const results = data.jobs_results ?? [];
+        for (const j of results) all.push(toRawPosting(j));
+        qLog.info('SerpApi page fetched', {
+          page,
+          results: results.length,
+          has_next_page: Boolean(data.serpapi_pagination?.next_page_token),
+        });
 
-      nextToken = data.serpapi_pagination?.next_page_token;
-      if (!nextToken) break;
+        nextToken = data.serpapi_pagination?.next_page_token;
+        if (!nextToken) break;
+      }
+    } catch (err) {
+      queriesFailed++;
+      qLog.error('query failed; continuing with remaining queries', { err });
     }
   }
 
@@ -91,20 +105,20 @@ export async function findJobs(
       platforms: options.platforms,
     });
   }
-  const ageFiltered = filterByAge(platformFiltered.kept, options.maxAgeDays);
-  if (ageFiltered.dropped > 0) {
-    log.debug('age filter dropped postings', {
-      dropped: ageFiltered.dropped,
-      max_age_days: options.maxAgeDays,
-    });
-  }
 
   return {
-    postings: ageFiltered.kept,
+    postings: platformFiltered.kept,
     searchesUsed,
     filteredByPlatform: platformFiltered.dropped,
-    filteredByAge: ageFiltered.dropped,
+    queriesFailed,
+    quotaExhausted,
   };
+}
+
+function isQuotaExhausted(serpapiError: string): boolean {
+  return /out of searches|monthly.*(limit|quota)|exceeded.*(searches|quota)/i.test(
+    serpapiError,
+  );
 }
 
 function filterByPlatform(
@@ -124,24 +138,6 @@ function filterByPlatform(
   return { kept, dropped };
 }
 
-function filterByAge(
-  postings: RawPosting[],
-  maxAgeDays: number | null | undefined,
-): { kept: RawPosting[]; dropped: number } {
-  if (maxAgeDays == null) return { kept: postings, dropped: 0 };
-  const kept: RawPosting[] = [];
-  let dropped = 0;
-  for (const p of postings) {
-    const iso = parsePostedAt(p.posted_at);
-    const age = ageInDaysFromIso(iso);
-    // Unknown age (null) is kept — lenient default; better to score and let
-    // recency-axis weight handle it than to silently drop fresh-looking postings.
-    if (age != null && age > maxAgeDays) dropped++;
-    else kept.push(p);
-  }
-  return { kept, dropped };
-}
-
 async function fetchPage(
   query: string,
   apiKey: string,
@@ -155,10 +151,31 @@ async function fetchPage(
   url.searchParams.set('gl', serpapi.country);
   url.searchParams.set('hl', serpapi.language);
   url.searchParams.set('api_key', apiKey);
-  if (serpapi.location) url.searchParams.set('location', serpapi.location);
-  if (serpapi.chips) url.searchParams.set('chips', serpapi.chips);
   if (nextToken) url.searchParams.set('next_page_token', nextToken);
-  return fetchWithRetry(url.toString(), log);
+
+  return retry(
+    async () => {
+      const res = await fetch(url.toString(), { signal: AbortSignal.timeout(60_000) });
+      if (res.ok) return (await res.json()) as SerpApiResponse;
+      const body = await res.text();
+      throw new SerpApiHttpError(res.status, `SerpApi HTTP ${res.status}: ${body.slice(0, 200)}`);
+    },
+    {
+      label: 'SerpApi request',
+      maxAttempts: SERPAPI_MAX_ATTEMPTS,
+      backoffBaseMs: SERPAPI_BACKOFF_BASE_MS,
+      backoffMaxMs: SERPAPI_BACKOFF_MAX_MS,
+      shouldRetry: (err) =>
+        err instanceof SerpApiHttpError ? err.status === 429 || err.status >= 500 : true,
+      log,
+    },
+  );
+}
+
+class SerpApiHttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
 }
 
 function dedupPostings(postings: RawPosting[]): RawPosting[] {
@@ -195,28 +212,3 @@ function pickApplyLink(j: SerpApiJob): string {
   return j.apply_options?.[0]?.link ?? j.share_link ?? j.related_links?.[0]?.link ?? '';
 }
 
-async function fetchWithRetry(url: string, log: Logger, attempt = 1): Promise<SerpApiResponse> {
-  const res = await fetch(url);
-  if (res.ok) return res.json() as Promise<SerpApiResponse>;
-
-  const retryable = res.status === 429 || res.status >= 500;
-  if (!retryable || attempt >= SERPAPI_MAX_ATTEMPTS) {
-    const body = await res.text();
-    log.error('SerpApi request failed (non-retryable or attempts exhausted)', {
-      status: res.status,
-      attempt,
-      body_preview: body.slice(0, 200),
-    });
-    throw new Error(`SerpApi HTTP ${res.status}: ${body}`);
-  }
-
-  const delayMs = Math.min(SERPAPI_BACKOFF_BASE_MS * 2 ** (attempt - 1), SERPAPI_BACKOFF_MAX_MS);
-  log.warn('SerpApi request failed; retrying', {
-    status: res.status,
-    attempt,
-    max_attempts: SERPAPI_MAX_ATTEMPTS,
-    delay_ms: delayMs,
-  });
-  await new Promise((r) => setTimeout(r, delayMs));
-  return fetchWithRetry(url, log, attempt + 1);
-}

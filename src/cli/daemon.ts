@@ -9,10 +9,16 @@ import { StartupValidationError, validateStartup } from './startup';
 
 const DEFAULT_DATA_DIR = './.data';
 
+const USAGE = 'usage: daemon <config.json path> [--once]';
+
 async function main() {
   const args = process.argv.slice(2);
   const once = args.includes('--once');
-  const configPath = args.find((a) => !a.startsWith('--')) ?? './config.json';
+  const configPath = args.find((a) => !a.startsWith('--'));
+  if (!configPath) {
+    logger.error('config path is required; pass it as a positional argument', { usage: USAGE });
+    process.exit(1);
+  }
   const dataDir = process.env.DATA_DIR || DEFAULT_DATA_DIR;
 
   logger.info('daemon starting', {
@@ -54,14 +60,9 @@ async function main() {
 async function resumeSleepSeconds(configPath: string, tracker: Tracker): Promise<number> {
   const last = await tracker.lastCycleFinishedAt();
   if (last === null) return 0;
-  let pollSeconds: number;
-  try {
-    pollSeconds = loadConfig(configPath).daemon.poll_interval_seconds;
-  } catch {
-    return 0;
-  }
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - last) / 1000));
-  return Math.max(0, pollSeconds - elapsedSeconds);
+  const pollSeconds = loadConfig(configPath).daemon.poll_interval_seconds;
+  const elapsed = Math.floor((Date.now() - last) / 1000);
+  return Math.max(0, pollSeconds - elapsed);
 }
 
 async function safeRunCycle(
@@ -82,6 +83,11 @@ async function safeRunCycle(
     }
   } finally {
     try {
+      await tracker.flushJobEvents();
+    } catch (flushErr) {
+      logger.warn('failed to flush job events', { err: flushErr });
+    }
+    try {
       await tracker.recordCycleFinishedAt(Date.now());
     } catch (writeErr) {
       logger.warn('failed to persist last-cycle timestamp', { err: writeErr });
@@ -99,23 +105,6 @@ async function runOneCycle(
   const { daemon } = config;
   const usage = await tracker.monthlyUsage();
 
-  if (usage.searches >= daemon.monthly_search_cap) {
-    logger.error('SerpApi monthly cap reached; skipping cycle', {
-      month: usage.month,
-      searches: usage.searches,
-      cap: daemon.monthly_search_cap,
-    });
-    return daemon.poll_interval_seconds;
-  }
-  if (usage.searches >= daemon.search_warn_threshold) {
-    logger.warn('SerpApi usage approaching cap', {
-      month: usage.month,
-      searches: usage.searches,
-      cap: daemon.monthly_search_cap,
-      warn_threshold: daemon.search_warn_threshold,
-    });
-  }
-
   const cycleId = newCycleId();
   const cycleLog = logger.child({ cycle_id: cycleId });
   const startedAt = Date.now();
@@ -128,9 +117,6 @@ async function runOneCycle(
     model: config.openai.model,
     llm_concurrency: config.openai.llm_concurrency,
     month_searches_used: usage.searches,
-    month_cap: daemon.monthly_search_cap,
-    serpapi_location: config.serpapi.location ?? null,
-    serpapi_chips: config.serpapi.chips ?? null,
   });
 
   const summary = await processCycle(config, sheet, secrets, tracker, cycleId, cycleLog);
@@ -149,7 +135,6 @@ async function runOneCycle(
     filtered: summary.filtered,
     inserted: summary.inserted,
     updated: summary.updated,
-    stale: summary.stale,
     errored: summary.errored,
     month: after.month,
     month_searches: after.searches,

@@ -21,4 +21,6 @@ Write simple, readable code prioritizing clarity over cleverness with self-expla
 
 ## Open questions (PRD §11)
 
-Cross-source dedup rule · hosting target · staleness K · scorer calibration. Flag, don't silently resolve.
+Cross-source dedup rule · hosting target · scorer calibration. Flag, don't silently resolve.
+
+(Resolved: **write-once sheet semantics**. The daemon writes a row when it first sees + scores a posting. After that it never touches the row — no `last_seen` bumps, no staleness sweep, no status mutation. Known `job_id`s are read for dedup only; the user owns the row state from then on.)

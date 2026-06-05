@@ -6,15 +6,11 @@
     ],
     "score_threshold": 70,
     "max_pages_per_query": 1,
-    "staleness_days": 14,
     "dedup_strategy": "title_company_via",
-    "max_jobs_per_hour": 10,
     "max_job_age_days": 7
   },
   "daemon": {
-    "poll_interval_seconds": 86400,
-    "monthly_search_cap": 100,
-    "search_warn_threshold": 80
+    "poll_interval_seconds": 21600
   },
   "serpapi": {
     "country": "in",
@@ -30,21 +26,11 @@
       "lever",
       "greenhouse",
       "ashby"
-    ],
-    "location": "",
-    "chips": ""
+    ]
   },
   "openai": {
     "model": "gpt-5.2",
     "llm_concurrency": 4
-  },
-  "extraction": {
-    "resume_max_chars": 12000,
-    "description_max_chars": 4000,
-    "chat_max_tokens": 200,
-    "analyze_max_tokens": 80,
-    "score_max_tokens": 500,
-    "profile_extraction_max_tokens": 800
   },
   "scoring": {
     "axis_weights": {
