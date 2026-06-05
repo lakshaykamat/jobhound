@@ -36,7 +36,8 @@ describe('loadConfig', () => {
     expect(cfg.cycle.score_threshold).toBe(70);
     expect(cfg.serpapi.country).toBe('in');
     expect(cfg.openai.model).toBeTruthy();
-    expect(cfg.daemon.poll_interval_seconds).toBeGreaterThanOrEqual(60);
+    expect(cfg.server.poll_interval_seconds).toBeGreaterThanOrEqual(60);
+    expect(cfg.server.http_port).toBeGreaterThan(0);
     expect(cfg.serpapi.platforms.length).toBeGreaterThan(0);
   });
 
@@ -110,7 +111,7 @@ describe('validateConfig', () => {
   });
 
   it('rejects poll_interval_seconds < 60', () => {
-    const cfg = makeConfig({ daemon: { poll_interval_seconds: 30 } });
+    const cfg = makeConfig({ server: { poll_interval_seconds: 30 } });
     expect(() => validateConfig(cfg)).toThrow(/poll_interval_seconds/);
   });
 

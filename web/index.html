@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jobhound</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Inter', 'Segoe UI', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            ink: {
+              50:'#f7f8fa',100:'#eef0f4',200:'#dbdfe7',300:'#b9bfcc',400:'#8b94a7',
+              500:'#5d6677',600:'#3d4453',700:'#272c37',800:'#181b22',900:'#0d0f14',
+            },
+          },
+          animation: { 'pulse-soft': 'pulseSoft 1.6s ease-in-out infinite' },
+          keyframes: { pulseSoft: { '0%,100%': { opacity: 1 }, '50%': { opacity: 0.4 } } },
+        },
+      },
+    };
+  </script>
+  <style>
+    html, body { background: #fafafa; color: #181b22; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: #dbdfe7; border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: #b9bfcc; }
+    .tabular { font-variant-numeric: tabular-nums; }
+
+    /* Sidebar */
+    .sidebar { background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%); }
+    .brand-mark {
+      background: linear-gradient(135deg, #181b22 0%, #3d4453 100%);
+      box-shadow: 0 1px 2px rgba(13,15,20,.18), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+
+    /* Nav items — base, hover, active. Hover must NOT fade the active item. */
+    .nav-item {
+      position: relative;
+      transition: background-color .15s ease, color .15s ease;
+    }
+    .nav-item:not(.active):hover { background: #f1f3f6; color: #181b22; }
+    .nav-item:not(.active):hover .nav-icon { color: #181b22; }
+    .nav-item.active {
+      background: #181b22;
+      color: #ffffff;
+      box-shadow: 0 1px 2px rgba(13,15,20,.18), inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    .nav-item.active .nav-icon { color: #ffffff; }
+    .nav-item.active:hover { background: #0d0f14; color: #ffffff; }
+    .nav-item.active:hover .nav-icon { color: #ffffff; }
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 4px; height: 4px;
+      border-radius: 9999px;
+      background: #7ee787;
+      box-shadow: 0 0 0 3px rgba(126,231,135,.18);
+    }
+
+    /* Segmented control */
+    .seg { background: #eef0f4; padding: 3px; border-radius: 9px; }
+    .seg button { transition: background-color .12s ease, color .12s ease, box-shadow .12s ease; }
+    .seg button:not(:disabled):hover { background: #ffffff; color: #181b22; }
+    .seg .seg-primary { background: #181b22; color: #ffffff; box-shadow: 0 1px 2px rgba(13,15,20,.2); }
+    .seg .seg-primary:not(:disabled):hover { background: #0d0f14; color: #ffffff; }
+  </style>
+</head>
+<body class="min-h-full font-sans antialiased text-ink-900">
+
+  <div class="flex min-h-screen">
+
+    <!-- Sidebar -->
+    <aside class="sidebar fixed inset-y-0 left-0 w-60 border-r border-ink-200/70 flex flex-col">
+
+      <!-- Brand -->
+      <div class="px-5 pt-6 pb-5">
+        <div class="flex items-center gap-3">
+          <div class="brand-mark h-9 w-9 rounded-lg flex items-center justify-center shrink-0">
+            <svg class="h-4 w-4 text-white" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 7h12M4 11h12M4 15h7"/>
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <div class="text-[15px] font-semibold tracking-tight leading-tight">Jobhound</div>
+            <div class="text-[10px] uppercase tracking-[0.14em] text-ink-400 font-semibold leading-tight mt-0.5">Discovery server</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nav -->
+      <div class="px-5 pt-3 pb-1.5 text-[10px] uppercase tracking-[0.14em] text-ink-400/80 font-semibold">Workspace</div>
+      <nav class="px-3 space-y-0.5">
+        <a href="#/overview" data-route="overview" class="nav-item flex items-center gap-3 rounded-lg pl-3 pr-7 py-2 text-[13.5px] font-medium text-ink-500">
+          <svg class="nav-icon h-[17px] w-[17px] text-ink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12L12 4l9 8"/><path d="M5 10v10a1 1 0 001 1h4v-7h4v7h4a1 1 0 001-1V10"/>
+          </svg>
+          <span>Overview</span>
+        </a>
+        <a href="#/activity" data-route="activity" class="nav-item flex items-center gap-3 rounded-lg pl-3 pr-7 py-2 text-[13.5px] font-medium text-ink-500">
+          <svg class="nav-icon h-[17px] w-[17px] text-ink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12h4l2.5-7L14 19l2.5-7H21"/>
+          </svg>
+          <span>Activity</span>
+        </a>
+        <a href="#/cycles" data-route="cycles" class="nav-item flex items-center gap-3 rounded-lg pl-3 pr-7 py-2 text-[13.5px] font-medium text-ink-500">
+          <svg class="nav-icon h-[17px] w-[17px] text-ink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 12a8 8 0 11-2.34-5.66L20 9"/><path d="M20 4v5h-5"/>
+          </svg>
+          <span>Cycles</span>
+        </a>
+        <a href="#/config" data-route="config" class="nav-item flex items-center gap-3 rounded-lg pl-3 pr-7 py-2 text-[13.5px] font-medium text-ink-500">
+          <svg class="nav-icon h-[17px] w-[17px] text-ink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+          <span>Config</span>
+        </a>
+      </nav>
+
+      <!-- Footer / controls -->
+      <div class="mt-auto p-4 space-y-3">
+        <div class="rounded-xl border border-ink-200/70 bg-white p-3 shadow-[0_1px_2px_rgba(13,15,20,0.04)]">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span id="status-dot" class="h-2 w-2 rounded-full bg-ink-300 shrink-0"></span>
+              <span id="status-label" class="text-[12px] font-semibold capitalize text-ink-800 truncate">paused</span>
+            </div>
+            <span class="inline-flex items-center gap-1 text-[10px] font-medium text-ink-400">
+              <span id="sse-dot" class="h-1.5 w-1.5 rounded-full bg-ink-300"></span>
+              <span id="sse-status">connecting…</span>
+            </span>
+          </div>
+          <div id="status-detail" class="text-[11px] text-ink-400 mt-1.5 tabular truncate min-h-[14px]"></div>
+        </div>
+
+        <div class="seg grid grid-cols-3 gap-1">
+          <button id="btn-start" class="seg-primary rounded-md px-2 py-1.5 text-[11px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed">Start</button>
+          <button id="btn-stop" class="rounded-md px-2 py-1.5 text-[11px] font-semibold text-ink-600 disabled:opacity-40 disabled:cursor-not-allowed" disabled>Stop</button>
+          <button id="btn-run-once" class="rounded-md px-2 py-1.5 text-[11px] font-semibold text-ink-600 disabled:opacity-40 disabled:cursor-not-allowed">Once</button>
+        </div>
+
+        <div class="text-[10px] text-ink-400 text-center">v0.1 · <a href="#/config" class="hover:text-ink-700">config</a></div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="ml-60 flex-1">
+
+      <!-- Page: Overview -->
+      <section data-page="overview" class="hidden px-10 py-10 max-w-5xl mx-auto space-y-8">
+        <header>
+          <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Dashboard</div>
+          <h1 class="text-2xl font-semibold tracking-tight mt-1">Overview</h1>
+          <p class="text-sm text-ink-500 mt-1" id="ov-subtitle">Server is paused. Start it from the sidebar.</p>
+        </header>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-ink-200/60 rounded-xl overflow-hidden border border-ink-200/60">
+          <div class="bg-white p-5">
+            <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Searches</div>
+            <div class="mt-2 text-2xl font-semibold tabular"><span id="m-searches">—</span><span class="text-sm text-ink-400 font-medium">/100</span></div>
+            <div class="mt-2 h-1 rounded-full bg-ink-100 overflow-hidden"><div id="m-searches-bar" class="h-full bg-ink-900 transition-all duration-500" style="width: 0%"></div></div>
+          </div>
+          <div class="bg-white p-5">
+            <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Tokens</div>
+            <div class="mt-2 text-2xl font-semibold tabular" id="m-tokens">—</div>
+            <div class="mt-2 text-[11px] text-ink-400" id="m-tokens-detail">this month</div>
+          </div>
+          <div class="bg-white p-5">
+            <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Spend</div>
+            <div class="mt-2 text-2xl font-semibold tabular">$<span id="m-cost">—</span></div>
+            <div class="mt-2 text-[11px] text-ink-400" id="m-cost-detail">this month</div>
+          </div>
+          <div class="bg-white p-5">
+            <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Cycles</div>
+            <div class="mt-2 text-2xl font-semibold tabular" id="m-cycles">—</div>
+            <div class="mt-2 text-[11px] text-ink-400">completed this month</div>
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-white border border-ink-200/70">
+          <div class="px-6 py-4 border-b border-ink-100">
+            <h2 class="text-sm font-semibold">Last completed cycle</h2>
+            <div class="text-xs text-ink-400 mt-0.5" id="lc-when">No cycles yet this run.</div>
+          </div>
+          <div id="last-cycle" hidden class="px-6 py-5">
+            <dl class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 text-sm">
+              <div><dt class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Duration</dt><dd class="mt-1 tabular text-ink-800" id="lc-duration">—</dd></div>
+              <div><dt class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Searches</dt><dd class="mt-1 tabular text-ink-800" id="lc-searches">—</dd></div>
+              <div><dt class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Tokens</dt><dd class="mt-1 tabular text-ink-800" id="lc-tokens">—</dd></div>
+              <div><dt class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Cost</dt><dd class="mt-1 tabular text-ink-800">$<span id="lc-cost">—</span></dd></div>
+              <div><dt class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Found / new / known</dt><dd class="mt-1 tabular text-ink-800" id="lc-found">—</dd></div>
+              <div><dt class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Scored / filtered</dt><dd class="mt-1 tabular text-ink-800" id="lc-scored">—</dd></div>
+              <div><dt class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Inserted / updated</dt><dd class="mt-1 tabular text-ink-800" id="lc-inserted">—</dd></div>
+              <div><dt class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Errored</dt><dd class="mt-1 tabular text-ink-800" id="lc-errored">—</dd></div>
+            </dl>
+            <div class="mt-4 pt-4 border-t border-ink-100 text-[11px] text-ink-400 flex items-center justify-between">
+              <span>cycle <span class="font-mono" id="lc-id">—</span></span>
+              <a href="#/cycles" class="text-ink-500 hover:text-ink-900 font-medium">All cycles →</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Page: Activity -->
+      <section data-page="activity" class="hidden px-10 py-10 max-w-5xl mx-auto space-y-6">
+        <header class="flex items-end justify-between">
+          <div>
+            <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Live</div>
+            <h1 class="text-2xl font-semibold tracking-tight mt-1">Activity</h1>
+            <p class="text-sm text-ink-500 mt-1">Cycle pipeline + per-job events, streamed over SSE.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <label class="text-xs text-ink-500 flex items-center gap-1.5">
+              <input id="filter-known" type="checkbox" class="rounded border-ink-300 text-ink-900 focus:ring-ink-500" />
+              include skipped
+            </label>
+            <button id="btn-clear" class="text-xs font-medium text-ink-500 hover:text-ink-900 px-2 py-1 rounded hover:bg-ink-100">Clear</button>
+          </div>
+        </header>
+
+        <!-- Current cycle pipeline -->
+        <div class="rounded-xl bg-white border border-ink-200/70">
+          <div class="px-6 py-4 border-b border-ink-100 flex items-center justify-between">
+            <div>
+              <h2 class="text-sm font-semibold">Current cycle</h2>
+              <div id="cycle-meta" class="text-xs text-ink-400 mt-0.5">No cycle in flight.</div>
+            </div>
+            <span id="cycle-state-pill" class="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-md bg-ink-100 text-ink-500">idle</span>
+          </div>
+          <div class="px-6 py-5">
+            <div class="grid grid-cols-5 gap-3 text-center">
+              <div class="rounded-md bg-ink-50/70 py-3">
+                <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Found</div>
+                <div class="mt-1 text-xl font-semibold tabular" id="stage-found">0</div>
+              </div>
+              <div class="rounded-md bg-ink-50/70 py-3">
+                <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">New</div>
+                <div class="mt-1 text-xl font-semibold tabular" id="stage-new">0</div>
+              </div>
+              <div class="rounded-md bg-ink-50/70 py-3">
+                <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Analyzed</div>
+                <div class="mt-1 text-xl font-semibold tabular" id="stage-analyzed">0</div>
+              </div>
+              <div class="rounded-md bg-ink-50/70 py-3">
+                <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Scored</div>
+                <div class="mt-1 text-xl font-semibold tabular" id="stage-scored">0</div>
+              </div>
+              <div class="rounded-md bg-ink-50/70 py-3">
+                <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Inserted</div>
+                <div class="mt-1 text-xl font-semibold tabular" id="stage-inserted">0</div>
+              </div>
+            </div>
+            <div class="mt-3 grid grid-cols-4 gap-3 text-center text-[11px]">
+              <div><span class="text-ink-400">Skipped</span> <span class="tabular text-ink-700 font-semibold" id="stage-known">0</span></div>
+              <div><span class="text-ink-400">Filtered</span> <span class="tabular text-amber-600 font-semibold" id="stage-filtered">0</span></div>
+              <div><span class="text-ink-400">Errored</span> <span class="tabular text-rose-600 font-semibold" id="stage-errored">0</span></div>
+              <div><span class="text-ink-400">Cost</span> <span class="tabular text-ink-700 font-semibold">$<span id="stage-cost">0.0000</span></span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live feed -->
+        <div class="rounded-xl bg-white border border-ink-200/70">
+          <div class="px-6 py-4 border-b border-ink-100">
+            <h2 class="text-sm font-semibold">Pipeline log</h2>
+            <div class="text-xs text-ink-400 mt-0.5">newest first · capped at 300</div>
+          </div>
+          <ul id="feed" class="divide-y divide-ink-100 max-h-[560px] overflow-y-auto"></ul>
+          <div id="feed-empty" class="px-6 py-12 text-center text-xs text-ink-400">
+            Waiting for activity. Hit <span class="font-semibold text-ink-700">Start</span> or
+            <span class="font-semibold text-ink-700">Once</span> from the sidebar.
+          </div>
+        </div>
+      </section>
+
+      <!-- Page: Cycles -->
+      <section data-page="cycles" class="hidden px-10 py-10 max-w-6xl mx-auto space-y-6">
+        <header>
+          <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">History</div>
+          <h1 class="text-2xl font-semibold tracking-tight mt-1">Cycles</h1>
+          <p class="text-sm text-ink-500 mt-1">All cycles recorded to <code class="font-mono text-[12px]">.data/cycles.jsonl</code>.</p>
+        </header>
+        <div class="rounded-xl bg-white border border-ink-200/70 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-xs">
+              <thead class="bg-ink-50/60 text-ink-500">
+                <tr>
+                  <th class="text-left font-semibold uppercase tracking-wider text-[10px] px-4 py-2.5">When</th>
+                  <th class="text-left font-semibold uppercase tracking-wider text-[10px] px-4 py-2.5">Duration</th>
+                  <th class="text-right font-semibold uppercase tracking-wider text-[10px] px-4 py-2.5">Found</th>
+                  <th class="text-right font-semibold uppercase tracking-wider text-[10px] px-4 py-2.5">New</th>
+                  <th class="text-right font-semibold uppercase tracking-wider text-[10px] px-4 py-2.5">Inserted</th>
+                  <th class="text-right font-semibold uppercase tracking-wider text-[10px] px-4 py-2.5">Filtered</th>
+                  <th class="text-right font-semibold uppercase tracking-wider text-[10px] px-4 py-2.5">Errored</th>
+                  <th class="text-right font-semibold uppercase tracking-wider text-[10px] px-4 py-2.5">Searches</th>
+                  <th class="text-right font-semibold uppercase tracking-wider text-[10px] px-4 py-2.5">Tokens</th>
+                  <th class="text-right font-semibold uppercase tracking-wider text-[10px] px-4 py-2.5">Cost</th>
+                </tr>
+              </thead>
+              <tbody id="cycles-body" class="divide-y divide-ink-100">
+                <tr><td colspan="10" class="px-4 py-6 text-center text-ink-400">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Page: Config -->
+      <section data-page="config" class="hidden px-10 py-10 max-w-5xl mx-auto space-y-6">
+        <header class="flex items-center justify-between">
+          <div>
+            <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Configuration</div>
+            <h1 class="text-2xl font-semibold tracking-tight mt-1">Config</h1>
+            <p class="text-sm text-ink-500 mt-1">Loaded from <code class="font-mono text-[12px]">config.json</code> · re-read each cycle.</p>
+          </div>
+          <button id="btn-reload-config" class="text-xs font-medium text-ink-700 px-3 py-1.5 rounded-md border border-ink-200 bg-white hover:bg-ink-50">Reload</button>
+        </header>
+        <div id="cfg-content" class="space-y-4">
+          <div class="rounded-xl bg-white border border-ink-200/70 px-6 py-8 text-sm text-ink-400">Loading config…</div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

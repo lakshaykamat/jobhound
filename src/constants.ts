@@ -17,7 +17,7 @@ export const APPS_SCRIPT_MAX_ATTEMPTS = 4;
 export const APPS_SCRIPT_BACKOFF_BASE_MS = 1000;
 export const APPS_SCRIPT_BACKOFF_MAX_MS = 8000;
 
-// --- Daemon plumbing (fixed) ---
+// --- Server plumbing (fixed) ---
 
 export const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
 
@@ -67,8 +67,9 @@ export const DEFAULT_SCORE_THRESHOLD = 70;
 export const DEFAULT_DEDUP_STRATEGY: DedupStrategy = "title_company_via";
 export const DEFAULT_MAX_JOB_AGE_DAYS = 7;
 
-// daemon
+// server
 export const DEFAULT_POLL_INTERVAL_SECONDS = 21600;
+export const DEFAULT_HTTP_PORT = 8787;
 
 // serpapi
 export const DEFAULT_SERPAPI_COUNTRY = "in";

@@ -17,4 +17,6 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod && pnpm store prune
 COPY --from=builder /app/dist ./dist
-CMD ["node", "dist/cli/daemon.js", "/app/config.json"]
+COPY web ./web
+EXPOSE 8787
+CMD ["node", "dist/cli/server.js", "/app/config.json"]

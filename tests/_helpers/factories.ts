@@ -64,7 +64,7 @@ export function makeRecord(overrides: Partial<JobRecord> = {}): JobRecord {
 
 export interface ConfigOverrides {
   cycle?: Partial<AppConfig['cycle']>;
-  daemon?: Partial<AppConfig['daemon']>;
+  server?: Partial<AppConfig['server']>;
   serpapi?: Partial<AppConfig['serpapi']>;
   openai?: Partial<AppConfig['openai']>;
   scoring?: Partial<AppConfig['scoring']>;
@@ -81,9 +81,10 @@ export function makeConfig(overrides: ConfigOverrides = {}): AppConfig {
       max_job_age_days: 7,
       ...(overrides.cycle ?? {}),
     },
-    daemon: {
+    server: {
       poll_interval_seconds: 21600,
-      ...(overrides.daemon ?? {}),
+      http_port: 8787,
+      ...(overrides.server ?? {}),
     },
     serpapi: {
       country: 'in',

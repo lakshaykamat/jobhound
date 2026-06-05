@@ -9,7 +9,7 @@
 
 ## 1. Summary
 
-Jobhound is a stateless background worker that discovers job postings, extracts structured data from each, scores it against a hand-written fit profile in `config.json`, and writes the results to a Google Sheet. It runs as a daemon — a long-lived scheduler loop — but holds no durable in-memory state. The Google Sheet is the single source of truth; any run can be killed and restarted without data loss or duplication.
+Jobhound is a stateless background worker that discovers job postings, extracts structured data from each, scores it against a hand-written fit profile in `config.json`, and writes the results to a Google Sheet. It runs as a long-lived server — a long-lived scheduler loop — but holds no durable in-memory state. The Google Sheet is the single source of truth; any run can be killed and restarted without data loss or duplication.
 
 Discovery uses one aggregator API (SerpApi's Google Jobs endpoint) rather than scraping individual job boards. Google Jobs aggregates Indeed, LinkedIn, Naukri, and thousands of other sources into one query, localized to India. This collapses discovery from eight fragile scrapers to a single API call and keeps the design login-free and stateless.
 
@@ -31,7 +31,7 @@ Job discovery is manual, repetitive, and noisy. Relevant postings are scattered 
 - Extract a consistent structured record from each posting.
 - Score each posting 0–100 against the operator's hand-written fit profile, with a short rationale.
 - Persist results to Google Sheets, deduplicated and idempotent across runs.
-- Run unattended as a daemon with no manual intervention between cycles.
+- Run unattended as a long-lived server with no manual intervention between cycles.
 
 **Non-goals**
 
@@ -44,7 +44,7 @@ Job discovery is manual, repetitive, and noisy. Relevant postings are scattered 
 
 ## 4. Users
 
-A single operator (a job seeker) who writes a fit profile and a few search queries into `config.json`, runs the daemon, and reads the resulting Sheet. The Sheet doubles as the interface — readable and filterable by a non-technical person.
+A single operator (a job seeker) who writes a fit profile and a few search queries into `config.json`, runs the server, and reads the resulting Sheet. The Sheet doubles as the interface — readable and filterable by a non-technical person.
 
 ---
 
@@ -52,7 +52,7 @@ A single operator (a job seeker) who writes a fit profile and a few search queri
 
 "Daemon" and "stateless" are in tension, and the resolution is the most important decision in this document, so it's stated first.
 
-The daemon is a thin scheduler loop. All real work happens inside one pure function:
+The server is a thin scheduler loop. All real work happens inside one pure function:
 
 ```
 process_cycle(config, profile, sheet) -> writes to sheet
@@ -66,7 +66,7 @@ process_cycle(config, profile, sheet) -> writes to sheet
 
 **Job state lives in the Sheet.** No Redis, no SQLite. The aggregator-API discovery model reinforces this: each Find call is a stateless HTTP request with nothing to persist or refresh.
 
-**Cost & observability state lives in `.data/`** (`cycles.jsonl`, `jobs.jsonl`, `usage-YYYY-MM.json`). This is the *one* exception to "no local state files." The justification: enforcing the SerpApi monthly cap, attributing USD spend, and answering "what happened in cycle X" all require running totals and event logs that would clutter the Sheet and slow `monthlyUsage()` queries as cycles accumulate. `.data/` is append-only JSONL + one small JSON-per-month; if wiped, the daemon resets month-to-date usage (cap re-arms from zero) and loses event history — no functional regression beyond that.
+**Cost & observability state lives in `.data/`** (`cycles.jsonl`, `jobs.jsonl`, `usage-YYYY-MM.json`). This is the *one* exception to "no local state files." The justification: enforcing the SerpApi monthly cap, attributing USD spend, and answering "what happened in cycle X" all require running totals and event logs that would clutter the Sheet and slow `monthlyUsage()` queries as cycles accumulate. `.data/` is append-only JSONL + one small JSON-per-month; if wiped, the server resets month-to-date usage (cap re-arms from zero) and loses event history — no functional regression beyond that.
 
 ---
 
@@ -199,7 +199,7 @@ One row per job. The sheet is the schema.
 
 - **Coverage gaps (accepted).** Five target platforms are unreachable via Google Jobs (§7). If any becomes business-critical, revisit — but the only path is out-of-scope logged-in scraping.
 - **Cross-source duplicates.** The same role can surface via multiple `via` sources (LinkedIn *and* Naukri). Current `job_id` includes `via`, so these would appear as separate rows. *Open: collapse cross-source dupes by hashing on `(title + company)` only, with `via` stored as a multi-value field? Needs a decision.*
-- **Hosting.** Where does the daemon run? *Open: existing Ubuntu server, a small always-on VPS, or a scheduled serverless function (which fits statelessness especially well)?*
+- **Hosting.** Where does the server run? *Open: existing Ubuntu server, a small always-on VPS, or a scheduled serverless function (which fits statelessness especially well)?*
 - **Scorer quality.** LLM scoring can inflate fit. Mitigated by a strict, fabrication-resistant prompt and stored rationale. *Open: a small human-labeled calibration set to check accuracy over time?*
 - **Sheets as a database.** Fine at one-person volume; not built for high write throughput. Acceptable here, but the ceiling exists.
 - **Staleness detection.** A posting found last cycle but not this one — expired, or just not returned? Need a rule (e.g. mark `stale` after K cycles unseen).
@@ -211,7 +211,7 @@ One row per job. The sheet is the schema.
 - **Shortlist precision:** of postings scored ≥ threshold, the share the operator marks worth pursuing. Target ≥ 60% in v1.
 - **Zero duplicates:** no `job_id` appears twice across run history.
 - **Free-tier fit:** monthly SerpApi searches stay under 100 at default settings.
-- **Uptime:** daemon completes scheduled cycles without intervention over a 7-day window.
+- **Uptime:** server completes scheduled cycles without intervention over a 7-day window.
 - **Cost per useful lead:** total LLM spend ÷ postings the operator acts on.
 
 ---

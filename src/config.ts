@@ -7,6 +7,7 @@ import {
   DEFAULT_MAX_JOB_AGE_DAYS,
   DEFAULT_MAX_PAGES_PER_QUERY,
   DEFAULT_OPENAI_MODEL,
+  DEFAULT_HTTP_PORT,
   DEFAULT_POLL_INTERVAL_SECONDS,
   DEFAULT_RECENCY_DECAY_DAYS,
   DEFAULT_RECENCY_FULL_DAYS,
@@ -27,8 +28,9 @@ export interface CycleConfig {
   max_job_age_days: number;
 }
 
-export interface DaemonConfig {
+export interface ServerConfig {
   poll_interval_seconds: number;
+  http_port: number;
 }
 
 export interface SerpApiConfig {
@@ -54,7 +56,7 @@ export interface ScoringConfig {
 
 export interface AppConfig {
   cycle: CycleConfig;
-  daemon: DaemonConfig;
+  server: ServerConfig;
   serpapi: SerpApiConfig;
   openai: OpenAiConfig;
   scoring: ScoringConfig;
@@ -63,7 +65,7 @@ export interface AppConfig {
 
 interface ConfigFile {
   cycle?: Partial<CycleConfig> & { query?: string };
-  daemon?: Partial<DaemonConfig>;
+  server?: Partial<ServerConfig>;
   serpapi?: Partial<SerpApiConfig>;
   openai?: Partial<OpenAiConfig>;
   scoring?: Partial<ScoringConfig>;
@@ -89,8 +91,9 @@ function buildConfig(raw: ConfigFile): AppConfig {
       dedup_strategy: raw.cycle?.dedup_strategy ?? DEFAULT_DEDUP_STRATEGY,
       max_job_age_days: raw.cycle?.max_job_age_days ?? DEFAULT_MAX_JOB_AGE_DAYS,
     },
-    daemon: {
-      poll_interval_seconds: raw.daemon?.poll_interval_seconds ?? DEFAULT_POLL_INTERVAL_SECONDS,
+    server: {
+      poll_interval_seconds: raw.server?.poll_interval_seconds ?? DEFAULT_POLL_INTERVAL_SECONDS,
+      http_port: raw.server?.http_port ?? DEFAULT_HTTP_PORT,
     },
     serpapi: {
       country: raw.serpapi?.country ?? DEFAULT_SERPAPI_COUNTRY,
@@ -126,9 +129,16 @@ export function validateConfig(cfg: AppConfig): void {
   if (cfg.cycle.max_pages_per_query < 1) errs.push('cycle.max_pages_per_query must be >= 1');
   if (cfg.cycle.max_job_age_days < 0) errs.push('cycle.max_job_age_days must be >= 0');
 
-  // daemon
-  if (cfg.daemon.poll_interval_seconds < 60) {
-    errs.push('daemon.poll_interval_seconds must be >= 60 (one minute)');
+  // server
+  if (cfg.server.poll_interval_seconds < 60) {
+    errs.push('server.poll_interval_seconds must be >= 60 (one minute)');
+  }
+  if (
+    !Number.isInteger(cfg.server.http_port) ||
+    cfg.server.http_port < 1 ||
+    cfg.server.http_port > 65535
+  ) {
+    errs.push('server.http_port must be an integer in [1, 65535]');
   }
 
   // serpapi
