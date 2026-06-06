@@ -4,22 +4,13 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "build": "tsc",
-    "start": "ts-node src/cli/server.ts",
-    "verify-sheet": "ts-node src/cli/verify-sheet.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.test.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
-  },
-  "dependencies": {
-    "dotenv": "^16.4.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "^2.1.9",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.6.0",
-    "vitest": "^2.1.9"
+    "build": "pnpm --filter @jobhound/server run build",
+    "start": "pnpm --filter @jobhound/server run start",
+    "verify-sheet": "pnpm --filter @jobhound/server run verify-sheet",
+    "typecheck": "pnpm --filter @jobhound/server run typecheck",
+    "test": "pnpm --filter @jobhound/server run test",
+    "test:coverage": "pnpm --filter @jobhound/server run test:coverage",
+    "landing": "pnpm --filter @jobhound/landing run dev",
+    "landing:build": "pnpm --filter @jobhound/landing run build"
   }
 }

@@ -6,3 +6,5 @@ config.json
 .data/
 todo.md
 coverage/
+*.tsbuildinfo
+.DS_Store

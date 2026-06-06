@@ -1,17 +1,19 @@
 services:
   jobhound:
-    build: .
+    build:
+      context: .
+      dockerfile: packages/server/Dockerfile
     image: jobhound:latest
     container_name: jobhound
     restart: always
     init: true
     env_file:
-      - .env
+      - packages/server/.env
     environment:
       TZ: UTC
       DATA_DIR: /app/.data
     ports:
       - "8787:8787"
     volumes:
-      - ./config.json:/app/config.json
-      - ./.data:/app/.data
+      - ./packages/server/config.json:/app/config.json
+      - ./packages/server/.data:/app/.data
