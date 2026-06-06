@@ -6,7 +6,7 @@ import { DashboardPreview } from '@/components/dashboard-preview';
 
 export function Hero() {
   return (
-    <section className="relative pt-32 pb-24 sm:pt-40 sm:pb-32">
+    <section className="relative pt-32 pb-24 sm:pt-40 sm:pb-32 overflow-x-clip">
       {/* layered backgrounds */}
       <div className="absolute inset-0 -z-10 bg-page" />
       <div className="absolute inset-0 -z-10 bg-grid bg-grid-fade opacity-60" />
