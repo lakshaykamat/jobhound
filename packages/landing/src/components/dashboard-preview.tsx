@@ -95,9 +95,11 @@ export function DashboardPreview() {
                   finished 2 min ago · scored 7 · wrote 5 rows
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <ChromeBtn>
-                  <RotateCw className="size-3.5" /> Run once
+                  <RotateCw className="size-3.5" />
+                  <span className="hidden sm:inline">Run once</span>
+                  <span className="sm:hidden">Run</span>
                 </ChromeBtn>
                 <ChromeBtn intent="brand">
                   <Pause className="size-3.5" /> Pause
@@ -108,18 +110,18 @@ export function DashboardPreview() {
             {/* meter strip */}
             <div className="grid grid-cols-3 gap-px bg-foreground/8 border-b border-foreground/8">
               <Meter label="SerpApi" value="62" cap="/ 100" hue="brand" pct={62} />
-              <Meter label="Tokens" value="18.4k" cap="this month" hue="muted" pct={32} />
-              <Meter label="Cost" value="$0.41" cap="USD this month" hue="emerald" pct={18} />
+              <Meter label="Tokens" value="18.4k" cap="this mo." hue="muted" pct={32} />
+              <Meter label="Cost" value="$0.41" cap="USD" hue="emerald" pct={18} />
             </div>
 
             {/* table */}
             <div className="px-1.5 pt-1.5">
-              <div className="grid grid-cols-[1.2fr_2fr_0.6fr_0.5fr_0.4fr] gap-3 px-3.5 py-2 text-[10.5px] font-mono uppercase tracking-wider text-muted-foreground/70">
+              <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)_auto] sm:grid-cols-[1.2fr_2fr_0.6fr_0.5fr_0.4fr] gap-3 px-3.5 py-2 text-[10.5px] font-mono uppercase tracking-wider text-muted-foreground/70">
                 <span>Company</span>
                 <span>Title</span>
-                <span>Via</span>
+                <span className="hidden sm:block">Via</span>
                 <span className="text-right">Fit</span>
-                <span className="text-right">Posted</span>
+                <span className="text-right hidden sm:block">Posted</span>
               </div>
               <div className="flex flex-col">
                 {rows.map((r, i) => (
@@ -128,22 +130,22 @@ export function DashboardPreview() {
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.9 + i * 0.06, duration: 0.4 }}
-                    className="grid grid-cols-[1.2fr_2fr_0.6fr_0.5fr_0.4fr] gap-3 px-3.5 py-2.5 items-center rounded-md hover:bg-foreground/[0.03] transition-colors"
+                    className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)_auto] sm:grid-cols-[1.2fr_2fr_0.6fr_0.5fr_0.4fr] gap-3 px-3.5 py-2.5 items-center rounded-md hover:bg-foreground/[0.03] transition-colors"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="size-5 rounded bg-foreground/8 ring-1 ring-inset ring-foreground/10 grid place-items-center text-[10px] font-semibold tracking-tight">
+                      <span className="hidden sm:grid size-5 rounded bg-foreground/8 ring-1 ring-inset ring-foreground/10 place-items-center text-[10px] font-semibold tracking-tight shrink-0">
                         {r.company[0]}
                       </span>
                       <span className="truncate text-[12.5px] font-medium">
                         {r.company}
                       </span>
                       {r.tag === 'NEW' && (
-                        <span className="text-[9.5px] font-mono px-1.5 py-px rounded bg-brand/15 text-brand ring-1 ring-inset ring-brand/30">
+                        <span className="hidden sm:inline text-[9.5px] font-mono px-1.5 py-px rounded bg-brand/15 text-brand ring-1 ring-inset ring-brand/30 shrink-0">
                           NEW
                         </span>
                       )}
                       {r.tag === 'FILTERED' && (
-                        <span className="text-[9.5px] font-mono px-1.5 py-px rounded bg-foreground/8 text-muted-foreground">
+                        <span className="hidden sm:inline text-[9.5px] font-mono px-1.5 py-px rounded bg-foreground/8 text-muted-foreground shrink-0">
                           FILTERED
                         </span>
                       )}
@@ -151,13 +153,13 @@ export function DashboardPreview() {
                     <div className="truncate text-[12.5px] text-foreground/85">
                       {r.title}
                     </div>
-                    <div className="text-[11.5px] font-mono text-muted-foreground">
+                    <div className="hidden sm:block text-[11.5px] font-mono text-muted-foreground">
                       {r.via}
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <FitBadge value={r.fit} />
                     </div>
-                    <div className="text-right text-[11.5px] font-mono text-muted-foreground">
+                    <div className="hidden sm:block text-right text-[11.5px] font-mono text-muted-foreground">
                       {r.posted}
                     </div>
                   </motion.div>
@@ -166,12 +168,12 @@ export function DashboardPreview() {
             </div>
 
             {/* footer event line */}
-            <div className="flex items-center gap-2 px-5 py-2.5 mt-1.5 border-t border-foreground/8 text-[11px] font-mono text-muted-foreground bg-foreground/[0.02]">
-              <span className="size-1.5 rounded-full bg-brand animate-pulse" />
-              <span className="text-foreground/80">cycle:finish</span>
-              <span className="text-muted-foreground/60">·</span>
-              <span>serpapi=2 tokens=1,204 usd=$0.041 +2 rows</span>
-              <span className="ml-auto text-muted-foreground/50">.data/cycles.jsonl</span>
+            <div className="flex items-center gap-2 px-5 py-2.5 mt-1.5 border-t border-foreground/8 text-[11px] font-mono text-muted-foreground bg-foreground/[0.02] overflow-hidden">
+              <span className="size-1.5 rounded-full bg-brand animate-pulse shrink-0" />
+              <span className="text-foreground/80 shrink-0">cycle:finish</span>
+              <span className="text-muted-foreground/60 shrink-0 hidden sm:inline">·</span>
+              <span className="truncate min-w-0">serpapi=2 tokens=1,204 usd=$0.041 +2 rows</span>
+              <span className="ml-auto text-muted-foreground/50 shrink-0 hidden md:inline">.data/cycles.jsonl</span>
             </div>
           </main>
         </div>
@@ -217,7 +219,7 @@ function ChromeBtn({
   return (
     <button
       className={cn(
-        'flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] font-medium border transition-colors',
+        'flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] font-medium border transition-colors whitespace-nowrap shrink-0',
         intent === 'brand'
           ? 'bg-brand/15 text-brand border-brand/25 hover:bg-brand/20'
           : 'bg-foreground/[0.03] text-foreground/80 border-foreground/10 hover:bg-foreground/[0.06]',
@@ -248,15 +250,17 @@ function Meter({
         ? 'bg-emerald-400/80'
         : 'bg-foreground/40';
   return (
-    <div className="bg-card px-4 py-3">
-      <div className="flex items-baseline justify-between mb-1.5">
-        <span className="text-[10.5px] font-mono uppercase tracking-wider text-muted-foreground/80">
+    <div className="bg-card px-3 sm:px-4 py-3 min-w-0">
+      <div className="flex items-baseline justify-between gap-2 mb-1.5">
+        <span className="text-[10.5px] font-mono uppercase tracking-wider text-muted-foreground/80 truncate">
           {label}
         </span>
-        <span className="text-[10px] font-mono text-muted-foreground/60">{cap}</span>
+        <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">
+          {cap}
+        </span>
       </div>
       <div className="flex items-baseline gap-1.5">
-        <span className="text-[22px] font-medium tracking-tight tabular-nums">
+        <span className="text-[18px] sm:text-[22px] font-medium tracking-tight tabular-nums">
           {value}
         </span>
       </div>
