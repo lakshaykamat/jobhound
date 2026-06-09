@@ -6,7 +6,7 @@ import { Tracker } from '../adapters/tracker';
 import { costUsd } from '../pricing';
 import { IdentifiedPosting, splitByKnown } from './dedup';
 import { analyzePosting } from './analyze';
-import { ageInDaysFromIso, parsePostedAt } from './posted-at';
+import { ageInDaysFromIso, formatDateDDMMYYYY, parsePostedAt } from './posted-at';
 import { scoreJob } from './score';
 import { Logger, logger as rootLogger } from '../logger';
 
@@ -260,7 +260,7 @@ function handleFailure(
     error: msg,
   });
 
-  const now = new Date().toISOString();
+  const now = formatDateDDMMYYYY(new Date());
   const record: JobRecord = analyzed ?? {
     job_id: jobId,
     title: posting.title,

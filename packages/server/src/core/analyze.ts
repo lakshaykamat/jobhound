@@ -4,7 +4,7 @@ import { OpenAiConfig } from '../config';
 import { ANALYZE_MAX_TOKENS, VALID_WORK_MODES } from '../constants';
 import { Logger, logger as rootLogger } from '../logger';
 import { ANALYZE_SCHEMA, ANALYZE_SYSTEM_PROMPT, buildAnalyzePrompt } from '../prompts';
-import { parsePostedAt } from './posted-at';
+import { formatDateDDMMYYYY, parsePostedAt } from './posted-at';
 
 export interface AnalyzeResult {
   record: JobRecord;
@@ -18,7 +18,7 @@ export async function analyzePosting(
   openai: OpenAiConfig,
   log: Logger = rootLogger,
 ): Promise<AnalyzeResult> {
-  const now = new Date().toISOString();
+  const now = formatDateDDMMYYYY(new Date());
   const salary = parseSalary(posting.salary);
 
   let workMode = detectWorkMode(posting);
