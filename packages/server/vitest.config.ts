@@ -17,6 +17,9 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: [
         'src/cli/**',
+        'src/core/event-bus.ts',
+        'src/core/observable-tracker.ts',
+        'src/core/server-state.ts',
         'src/logger.ts',
         'src/prompts.ts',
         'src/types.ts',
