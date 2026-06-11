@@ -109,9 +109,9 @@ export function DashboardPreview() {
 
             {/* meter strip */}
             <div className="grid grid-cols-3 gap-px bg-foreground/8 border-b border-foreground/8">
-              <Meter label="SerpApi" value="62" cap="/ 100" hue="brand" pct={62} />
+              <Meter label="Searches" value="62" cap="/ 100" hue="brand" pct={62} />
               <Meter label="Tokens" value="18.4k" cap="this mo." hue="muted" pct={32} />
-              <Meter label="Cost" value="$0.41" cap="USD" hue="emerald" pct={18} />
+              <Meter label="Spend" value="$0.41" cap="this mo." hue="emerald" pct={18} />
             </div>
 
             {/* table */}
@@ -170,10 +170,10 @@ export function DashboardPreview() {
             {/* footer event line */}
             <div className="flex items-center gap-2 px-5 py-2.5 mt-1.5 border-t border-foreground/8 text-[11px] font-mono text-muted-foreground bg-foreground/[0.02] overflow-hidden">
               <span className="size-1.5 rounded-full bg-brand animate-pulse shrink-0" />
-              <span className="text-foreground/80 shrink-0">cycle:finish</span>
+              <span className="text-foreground/80 shrink-0">done</span>
               <span className="text-muted-foreground/60 shrink-0 hidden sm:inline">·</span>
-              <span className="truncate min-w-0">serpapi=2 tokens=1,204 usd=$0.041 +2 rows</span>
-              <span className="ml-auto text-muted-foreground/50 shrink-0 hidden md:inline">.data/cycles.jsonl</span>
+              <span className="truncate min-w-0">2 new roles · cost 4¢ · sleeping for 6h</span>
+              <span className="ml-auto text-muted-foreground/50 shrink-0 hidden md:inline">live</span>
             </div>
           </main>
         </div>

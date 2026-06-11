@@ -4,8 +4,8 @@ import { Separator } from '@/components/ui/separator';
 const colA = [
   { label: 'Features',      href: '#features' },
   { label: 'How it works',  href: '#how-it-works' },
-  { label: 'Cost meters',   href: '#cost' },
-  { label: 'Stack',         href: '#stack' },
+  { label: 'Cost',          href: '#cost' },
+  { label: 'For the curious', href: '#stack' },
 ];
 
 const colB = [
@@ -30,8 +30,8 @@ export function SiteFooter() {
               </span>
             </a>
             <p className="mt-4 text-[13.5px] text-muted-foreground leading-relaxed max-w-sm">
-              One operator. One resume. One Google Sheet. Built in the open in
-              Bengaluru.
+              A quieter way to job hunt. Free, open source, built in the open
+              from Bengaluru.
             </p>
             <a
               href="https://github.com/lakshaykamat/jobhound"
@@ -51,7 +51,7 @@ export function SiteFooter() {
         <Separator className="my-8 bg-foreground/8" />
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-[12px] text-muted-foreground/80 font-mono">
-          <span>© 2026 Lakshay Kamat · Private · Single-operator deployment</span>
+          <span>© 2026 Lakshay Kamat · MIT licensed · Free forever</span>
           <span className="flex items-center gap-2">
             <span className="size-1.5 rounded-full bg-emerald-400" />
             All systems nominal

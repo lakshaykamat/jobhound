@@ -5,31 +5,31 @@ import { SectionHeading } from '@/components/section-heading';
 const steps = [
   {
     n: '01',
-    title: 'Discover',
-    body: 'Each saved query runs against SerpApi’s Google Jobs engine. Quota-bounded by design.',
+    title: 'Tell it about you',
+    body: 'Drop in your resume and a few search terms — roles you want, places you’d work, what counts as a dealbreaker.',
     icon: Search,
-    mono: 'SerpApi · Google Jobs',
+    mono: 'Once. Edit any time.',
   },
   {
     n: '02',
-    title: 'Dedup',
-    body: 'A hash of title + company + via skips anything already in the Sheet. Zero tokens spent.',
+    title: 'It searches, quietly',
+    body: 'Every few hours it sweeps Google Jobs for fresh postings. Anything it already showed you is skipped — no repeats.',
     icon: Filter,
-    mono: 'job_id = hash(title+company+via)',
+    mono: 'Runs while you’re asleep',
   },
   {
     n: '03',
-    title: 'Score',
-    body: 'Survivors go through GPT for a 0–100 fit score and a one-liner, weighted against your profile.',
+    title: 'It ranks the fit',
+    body: 'Each new posting is read against your resume and scored 0–100. You see why it scored that way in one line.',
     icon: Gauge,
-    mono: 'gpt-4o-mini · fit_profile',
+    mono: '0 – 100 fit score',
   },
   {
     n: '04',
-    title: 'Write',
-    body: 'New rows append to your Sheet, once. After that the row is yours — the server never edits it.',
+    title: 'You decide',
+    body: 'The shortlist lands in your dashboard. Apply, archive, ignore — your list, your call. Jobhound never edits it after.',
     icon: FileSpreadsheet,
-    mono: 'Apps Script Web App',
+    mono: 'Your shortlist is yours',
   },
 ];
 
@@ -39,14 +39,14 @@ export function HowItWorks() {
       <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
       <div className="mx-auto max-w-6xl px-5">
         <SectionHeading
-          eyebrow="The cycle"
+          eyebrow="How it works"
           title={
             <>
               Four steps. Then it{' '}
-              <span className="italic font-serif text-muted-foreground">sleeps.</span>
+              <span className="italic font-serif text-muted-foreground">goes quiet.</span>
             </>
           }
-          subtitle="Loops forever once you press Start. Sleeps poll_interval_seconds between cycles, then re-reads your config and goes again."
+          subtitle="Set it up once. It checks for new roles in the background, ranks them against you, and only surfaces the ones worth your time."
         />
 
         <div className="mt-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

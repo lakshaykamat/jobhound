@@ -4,7 +4,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { AppConfig } from '../config';
 import { SHUTDOWN_SIGNALS } from '../constants';
-import { JobsSheet } from '../adapters/sheets';
+import { JobsStore } from '../adapters/jobs-store';
 import { Secrets } from '../core/process-cycle';
 import { EventBus, ServerEvent } from '../core/event-bus';
 import { ObservableTracker } from '../core/observable-tracker';
@@ -37,12 +37,12 @@ async function main() {
   });
 
   const { env, config } = validateStartup({ configPath, dataDir });
-  const sheet = new JobsSheet(env.APPS_SCRIPT_URL, env.APPS_SCRIPT_TOKEN);
+  const store = new JobsStore(dataDir);
   const bus = new EventBus();
   const tracker = new ObservableTracker(dataDir, bus);
   const secrets: Secrets = { serpapi: env.SERPAPI_KEY, openai: env.OPENAI_KEY };
 
-  const controller = new ServerController({ configPath, sheet, tracker, secrets, bus });
+  const controller = new ServerController({ configPath, store, tracker, secrets, bus });
 
   if (once) {
     const result = await controller.runOnce();
@@ -57,7 +57,7 @@ async function main() {
 
   const port = process.env.PORT ? Number(process.env.PORT) : config.server.http_port;
   const httpServer = createServer((req, res) => {
-    handleRequest(req, res, controller, bus, dataDir).catch((err) => {
+    handleRequest(req, res, controller, bus, dataDir, store).catch((err) => {
       logger.error('request handler crashed', { err, url: req.url });
       if (!res.headersSent) {
         res.writeHead(500, { 'content-type': 'application/json' });
@@ -86,6 +86,7 @@ async function handleRequest(
   controller: ServerController,
   bus: EventBus,
   dataDir: string,
+  store: JobsStore,
 ): Promise<void> {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
   const { pathname } = url;
@@ -136,6 +137,10 @@ async function handleRequest(
     const limit = clampLimit(url.searchParams.get('limit'), 200, 2000);
     const rows = await readTailJsonl(path.join(dataDir, 'jobs.jsonl'), limit);
     return json(res, 200, { jobs: rows });
+  }
+  if (method === 'GET' && pathname === '/api/jobs-store') {
+    const records = await store.readAll();
+    return json(res, 200, { jobs: records });
   }
 
   if (method === 'GET' && pathname === '/api/events') {

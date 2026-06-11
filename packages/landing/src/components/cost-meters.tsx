@@ -7,35 +7,35 @@ import { cn } from '@/lib/utils';
 const meters = [
   {
     icon: Search,
-    eyebrow: 'SerpApi searches',
-    cap: '100 / mo free tier',
+    eyebrow: 'Searches this month',
+    cap: 'free tier · 100',
     value: 62,
     suffix: '',
     pct: 62,
     color: 'brand',
-    note: '4 queries × 1 page × 16 cycles',
+    note: 'Four queries, every six hours. Fits inside the free tier.',
   },
   {
     icon: Coins,
-    eyebrow: 'LLM tokens',
-    cap: 'gpt-4o-mini',
+    eyebrow: 'Words read by AI',
+    cap: 'this month',
     value: 18420,
     suffix: '',
     pct: 32,
     color: 'foreground',
-    note: 'Analyze + score, 7 scored, 11 skipped-known',
+    note: 'Only new postings get read. Anything seen before is skipped for free.',
   },
   {
     icon: Banknote,
-    eyebrow: 'USD spent',
-    cap: 'model + serpapi',
+    eyebrow: 'You’ve spent',
+    cap: 'this month',
     value: 0.41,
     prefix: '$',
     decimals: 2,
     suffix: '',
     pct: 18,
     color: 'emerald',
-    note: 'Prices hardcoded in src/pricing.ts',
+    note: 'A typical month runs well under a dollar. You can cap it lower.',
   },
 ] as const;
 
@@ -45,16 +45,16 @@ export function CostMeters() {
       <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
       <div className="mx-auto max-w-6xl px-5">
         <SectionHeading
-          eyebrow="Cost meters"
+          eyebrow="What it costs"
           title={
             <>
-              You always know{' '}
+              Cheaper than a coffee.{' '}
               <span className="italic font-serif text-muted-foreground">
-                what it cost.
+                Capped, on purpose.
               </span>
             </>
           }
-          subtitle="Every cycle logs three numbers. The cap is enforced, not a polite suggestion."
+          subtitle="A typical month runs under a dollar — and the cap is a hard stop, not a polite suggestion. You always know the running total."
         />
 
         <div className="mt-16 grid gap-3 sm:grid-cols-3">
@@ -65,11 +65,15 @@ export function CostMeters() {
 
         {/* row of bonus stats */}
         <div className="mt-3 grid sm:grid-cols-4 gap-3">
-          <Stat label="Average cycle" value="14s" />
-          <Stat label="Rows written" value="38 / mo" />
-          <Stat label="Skipped-known" value="178" />
+          <Stat label="Each check takes" value="~14s" />
+          <Stat label="New roles / month" value="~38" />
+          <Stat label="Duplicates skipped" value="178" />
           <Stat label="Errors" value="0" trend="great" />
         </div>
+
+        <p className="mt-6 text-center text-[11px] font-mono text-muted-foreground/60">
+          Numbers shown are from a sample month. Yours depend on your queries and cadence.
+        </p>
       </div>
     </section>
   );

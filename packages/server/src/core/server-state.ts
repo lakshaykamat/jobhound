@@ -1,6 +1,6 @@
 import { loadConfig } from '../config';
 import { logger } from '../logger';
-import { JobsSheet } from '../adapters/sheets';
+import { JobsStore } from '../adapters/jobs-store';
 import { CycleRecord, makeCycleRecord, newCycleId } from '../adapters/tracker';
 import { processCycle, Secrets } from './process-cycle';
 import { EventBus, ServerStateSnapshot, ServerStatus } from './event-bus';
@@ -8,7 +8,7 @@ import { ObservableTracker } from './observable-tracker';
 
 export interface ServerDeps {
   configPath: string;
-  sheet: JobsSheet;
+  store: JobsStore;
   tracker: ObservableTracker;
   secrets: Secrets;
   bus: EventBus;
@@ -204,7 +204,7 @@ export class ServerController {
     try {
       const summary = await processCycle(
         config,
-        this.deps.sheet,
+        this.deps.store,
         this.deps.secrets,
         this.deps.tracker,
         cycleId,

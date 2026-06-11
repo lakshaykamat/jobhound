@@ -2,14 +2,14 @@ import { SectionHeading } from '@/components/section-heading';
 import { cn } from '@/lib/utils';
 
 const rows = [
-  { k: 'Runtime',       v: 'Node 22',          d: 'TypeScript · pnpm workspaces' },
-  { k: 'Discovery',     v: 'SerpApi',          d: 'Google Jobs engine' },
-  { k: 'Reasoning',     v: 'OpenAI',           d: 'analyze + score · model in src/constants.ts' },
-  { k: 'Persistence',   v: 'Google Sheets',    d: 'via Apps Script Web App' },
-  { k: 'Observability', v: 'JSONL + SSE',      d: 'append-only · streamed to the UI' },
-  { k: 'Dashboard',     v: 'Tailwind + HTML',  d: 'single page · no build step' },
-  { k: 'Tests',         v: 'Vitest',           d: '122 passing · ≥85% line coverage' },
-  { k: 'Container',     v: 'Docker · GHCR',    d: 'multi-stage · arm64 + amd64' },
+  { k: 'Runtime',       v: 'Node 22',           d: 'TypeScript · pnpm workspaces' },
+  { k: 'Discovery',     v: 'SerpApi',           d: 'Google Jobs engine' },
+  { k: 'Reasoning',     v: 'OpenAI',            d: 'reads and scores each new posting' },
+  { k: 'Storage',       v: 'Local JSON',        d: 'one folder on your disk · nothing else' },
+  { k: 'Live updates',  v: 'Server-sent events', d: 'every step streams to the dashboard' },
+  { k: 'Dashboard',     v: 'Tailwind + HTML',   d: 'single page · no build step' },
+  { k: 'Tested with',   v: 'Vitest',            d: 'unit + integration · CI on every commit' },
+  { k: 'Container',     v: 'Docker · GHCR',     d: 'multi-stage · arm64 + amd64' },
 ];
 
 export function StackSection() {
@@ -18,7 +18,7 @@ export function StackSection() {
       <div className="mx-auto max-w-6xl px-5">
         <SectionHeading
           align="left"
-          eyebrow="Under the hood"
+          eyebrow="For the curious"
           title={
             <>
               Boring tech, on purpose.{' '}
@@ -27,7 +27,7 @@ export function StackSection() {
               </span>
             </>
           }
-          subtitle="A hand-rolled HTTP server, a single Google Sheet, and a folder of JSONL files. That's the entire system."
+          subtitle="A small HTTP server, a handful of JSON files in one folder, and a single dashboard page. That’s the whole thing — readable in an afternoon."
         />
 
         <div className="mt-14 grid sm:grid-cols-2 rounded-xl border bg-card/40 backdrop-blur-sm overflow-hidden">

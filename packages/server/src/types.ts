@@ -65,12 +65,6 @@ export interface FitProfile {
 
 export type DedupStrategy = 'title_company_via' | 'title_company';
 
-export interface SelfTestStep {
-  check: string;
-  ok: boolean;
-  detail: string;
-}
-
 export interface RawPosting {
   title: string;
   company: string;

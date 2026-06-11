@@ -64,7 +64,7 @@ export interface AppConfig {
 }
 
 interface ConfigFile {
-  cycle?: Partial<CycleConfig> & { query?: string };
+  cycle?: Partial<CycleConfig> & { query?: string; roles?: string[]; locations?: string[] };
   server?: Partial<ServerConfig>;
   serpapi?: Partial<SerpApiConfig>;
   openai?: Partial<OpenAiConfig>;
@@ -177,8 +177,27 @@ export function validateConfig(cfg: AppConfig): void {
 
 function normalizeQueries(cycle: ConfigFile['cycle']): string[] {
   if (cycle?.queries?.length) return cycle.queries.map((q) => q.trim()).filter(Boolean);
+
+  const roles = (cycle?.roles ?? []).map((r) => r.trim()).filter(Boolean);
+  const locations = (cycle?.locations ?? []).map((l) => l.trim()).filter(Boolean);
+  if (roles.length) {
+    const combined = locations.length
+      ? roles.flatMap((r) => locations.map((l) => `${r} ${l}`))
+      : roles;
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const q of combined) {
+      if (seen.has(q)) continue;
+      seen.add(q);
+      out.push(q);
+    }
+    return out;
+  }
+
   if (cycle?.query?.trim()) return [cycle.query.trim()];
-  throw new Error('config.cycle must define "queries" (string[]) or "query" (string)');
+  throw new Error(
+    'config.cycle must define "queries" (string[]), "roles" (+ optional "locations"), or "query" (string)',
+  );
 }
 
 function normalizeScoreThreshold(value: unknown): number {

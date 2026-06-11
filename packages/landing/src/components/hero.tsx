@@ -28,9 +28,9 @@ export function Hero() {
           >
             <Badge variant="brand" className="!py-0 !px-1.5 !text-[10px]">
               <Sparkles className="size-2.5" />
-              v0.1.0
+              New
             </Badge>
-            <span>Pause-by-default · free &amp; open source</span>
+            <span>Free, open source, runs on your laptop</span>
             <ArrowUpRight className="size-3 opacity-60 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
           </a>
         </motion.div>
@@ -54,11 +54,9 @@ export function Hero() {
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
           className="mx-auto mt-6 max-w-2xl text-center text-[17px] leading-relaxed text-muted-foreground"
         >
-          Jobhound pulls postings from Google Jobs, scores them against your resume,
-          and drops the worthwhile ones into a Google Sheet. Local-first, cap-aware,
-          and{' '}
-          <span className="font-mono text-foreground/85">paused</span> until you say
-          go.
+          Stop scrolling job boards at midnight. Jobhound searches every few hours,
+          ranks each posting against your resume, and shows you the handful
+          actually worth opening. Runs on your machine — your data never leaves it.
         </motion.p>
 
         {/* CTAs */}
@@ -105,12 +103,12 @@ export function Hero() {
         >
           <span className="inline-flex items-center gap-1.5">
             <span className="size-1.5 rounded-full bg-emerald-400" />
-            122 tests passing
+            Self-hosted
           </span>
           <span className="text-muted-foreground/30">·</span>
-          <span>MIT · single-operator</span>
+          <span>MIT licensed</span>
           <span className="text-muted-foreground/30">·</span>
-          <span>Node 22 + Docker</span>
+          <span>No account. No tracking.</span>
         </motion.div>
 
         {/* dashboard preview */}

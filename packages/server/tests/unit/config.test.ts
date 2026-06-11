@@ -27,6 +27,32 @@ describe('loadConfig', () => {
     expect(cfg.cycle.queries).toEqual(['backend engineer']);
   });
 
+  it('cross-products roles × locations into queries', () => {
+    const p = writeConfig({
+      cycle: {
+        roles: ['backend engineer', 'sde'],
+        locations: ['noida', 'gurgaon'],
+      },
+      profile: { skills: ['s'], role_titles: ['r'] },
+    });
+    const cfg = loadConfig(p);
+    expect(cfg.cycle.queries).toEqual([
+      'backend engineer noida',
+      'backend engineer gurgaon',
+      'sde noida',
+      'sde gurgaon',
+    ]);
+  });
+
+  it('uses roles as-is when locations is empty', () => {
+    const p = writeConfig({
+      cycle: { roles: ['backend engineer remote'] },
+      profile: { skills: ['s'], role_titles: ['r'] },
+    });
+    const cfg = loadConfig(p);
+    expect(cfg.cycle.queries).toEqual(['backend engineer remote']);
+  });
+
   it('applies defaults for omitted sections', () => {
     const p = writeConfig({
       cycle: { queries: ['x'] },

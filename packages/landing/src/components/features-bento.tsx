@@ -25,7 +25,7 @@ export function FeaturesBento() {
               </span>
             </>
           }
-          subtitle="Six small commitments that add up to a job hunt you can ignore for a week and not regret."
+          subtitle="Six small promises that add up to a job hunt you can step away from for a week without regret."
         />
 
         <div className="mt-16 grid grid-cols-12 grid-rows-[auto_auto] gap-3">
@@ -33,13 +33,13 @@ export function FeaturesBento() {
           <BentoTile className="col-span-12 lg:col-span-7 row-span-1 p-6 pb-0 overflow-hidden">
             <div className="flex items-start justify-between gap-6">
               <div className="max-w-sm">
-                <TileEyebrow icon={Zap}>Live event feed</TileEyebrow>
+                <TileEyebrow icon={Zap}>Nothing hidden</TileEyebrow>
                 <h3 className="text-[22px] font-medium tracking-tight mt-2">
-                  Watch each cycle as it happens.
+                  Watch it work in real time.
                 </h3>
                 <p className="text-[13.5px] text-muted-foreground leading-relaxed mt-2">
-                  Server-Sent Events push every find, dedup, score, and write to
-                  the dashboard the moment it happens. Nothing is hidden.
+                  Every search, every match, every skipped duplicate streams to
+                  the dashboard as it happens. No black box.
                 </p>
               </div>
               <div className="hidden sm:block shrink-0">
@@ -53,63 +53,62 @@ export function FeaturesBento() {
                 <span className="size-2 rounded-full bg-foreground/15" />
                 <span className="size-2 rounded-full bg-foreground/15" />
                 <span className="ml-2 text-[10.5px] font-mono text-muted-foreground/70">
-                  /api/events
+                  Activity
                 </span>
                 <span className="ml-auto text-[10px] font-mono text-emerald-400/80 inline-flex items-center gap-1.5">
                   <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  open
+                  live
                 </span>
               </div>
               <ul className="px-4 py-3 text-[12px] font-mono leading-[1.85] space-y-0">
-                <FeedLine kind="cycle"  msg="cycle:start  q=&quot;backend engineer remote india&quot;" />
-                <FeedLine kind="found"  msg="found 11 — known 9 — fresh 2" />
-                <FeedLine kind="skip"   msg="skipped-known  Acme · Backend · linkedin" />
-                <FeedLine kind="score"  msg='scored Stripe · Senior Backend · fit ' highlight="87" />
-                <FeedLine kind="finish" msg="cycle:finish  serpapi=2 tokens=1,204 usd=$0.041 +2 rows" />
+                <FeedLine ts="11:26:02" kind="search" msg='searching “backend engineer · remote · india”' />
+                <FeedLine ts="11:26:05" kind="found"  msg="11 postings · 9 already seen · 2 new" />
+                <FeedLine ts="11:26:07" kind="skip"   msg="skipped — Acme · Backend (saw it yesterday)" />
+                <FeedLine ts="11:26:11" kind="score"  msg="Stripe · Senior Backend · fit " highlight="87" />
+                <FeedLine ts="11:26:14" kind="finish" msg="done · 2 new roles added · sleeping for 6h" />
               </ul>
             </div>
           </BentoTile>
 
           {/* Tile 2 — Resume-aware scoring */}
           <BentoTile className="col-span-12 sm:col-span-6 lg:col-span-5 p-6">
-            <TileEyebrow icon={SlidersHorizontal}>Resume-aware scoring</TileEyebrow>
+            <TileEyebrow icon={SlidersHorizontal}>Scored against you</TileEyebrow>
             <h3 className="text-[20px] font-medium tracking-tight mt-2 mb-1">
-              Your profile is the prompt.
+              It reads your resume first.
             </h3>
             <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-              Skills, seniority, role titles, locations — distilled into a JSON
-              profile that goes straight into the scorer.
+              Your skills, seniority, target roles, and where you’ll work — every
+              posting is judged against that, not a generic keyword bag.
             </p>
 
             <div className="mt-5 rounded-lg border border-foreground/8 bg-foreground/[0.025] p-3.5 font-mono text-[11.5px] leading-relaxed">
-              <div><span className="text-muted-foreground">"seniority":</span> <span className="text-foreground">"senior"</span>,</div>
-              <div><span className="text-muted-foreground">"skills":</span> <span className="text-foreground">["typescript", "node", "postgres"]</span>,</div>
-              <div><span className="text-muted-foreground">"role_titles":</span> <span className="text-foreground">["backend", "platform"]</span>,</div>
-              <div><span className="text-muted-foreground">"locations":</span> <span className="text-foreground">["remote", "bengaluru"]</span></div>
+              <div><span className="text-muted-foreground">seniority</span> <span className="text-foreground">senior</span></div>
+              <div><span className="text-muted-foreground">skills</span> <span className="text-foreground">typescript · node · postgres</span></div>
+              <div><span className="text-muted-foreground">roles</span> <span className="text-foreground">backend · platform</span></div>
+              <div><span className="text-muted-foreground">where</span> <span className="text-foreground">remote · bengaluru</span></div>
             </div>
           </BentoTile>
 
           {/* Tile 3 — Write-once */}
           <BentoTile className="col-span-12 sm:col-span-6 lg:col-span-4 p-6">
-            <TileEyebrow icon={Lock}>Write-once</TileEyebrow>
+            <TileEyebrow icon={Lock}>Your list, your call</TileEyebrow>
             <h3 className="text-[20px] font-medium tracking-tight mt-2 mb-1">
-              The row is yours.
+              It adds. You decide the rest.
             </h3>
             <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-              The server writes a row the first time it sees a posting. After
-              that, it never touches it again. Mark it{' '}
-              <span className="font-mono text-foreground/85">applied</span>,
-              delete it, ignore it — your call.
+              Jobhound only ever adds new postings. Once a role is on your list,
+              it’s yours — mark it applied, archive it, ignore it. Nothing
+              overwrites your notes.
             </p>
 
             <div className="mt-5 flex items-center gap-2 text-[11.5px] font-mono">
               <kbd className="px-1.5 py-0.5 rounded bg-foreground/[0.06] border border-foreground/10">
-                INSERT
+                Add
               </kbd>
-              <span className="text-emerald-400/90">allowed</span>
+              <span className="text-emerald-400/90">yes</span>
               <span className="text-muted-foreground/50">·</span>
               <kbd className="px-1.5 py-0.5 rounded bg-foreground/[0.06] border border-foreground/10">
-                UPDATE
+                Edit yours
               </kbd>
               <span className="text-muted-foreground line-through">never</span>
             </div>
@@ -117,18 +116,18 @@ export function FeaturesBento() {
 
           {/* Tile 4 — Local-first */}
           <BentoTile className="col-span-12 sm:col-span-6 lg:col-span-4 p-6">
-            <TileEyebrow icon={Database}>Local-first</TileEyebrow>
+            <TileEyebrow icon={Database}>Yours to keep</TileEyebrow>
             <h3 className="text-[20px] font-medium tracking-tight mt-2 mb-1">
-              No Redis. No SQLite.
+              Your data stays with you.
             </h3>
             <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-              All meters and events live in append-only JSONL inside{' '}
-              <span className="font-mono text-foreground/85">.data/</span>. Mount it as a
-              volume in production. Wipe it to reset.
+              Your resume, your shortlist, your search history — all of it sits
+              in one folder on your machine. No cloud account, no signup, no
+              third party gets a copy.
             </p>
 
             <div className="mt-5 grid grid-cols-3 gap-1.5 text-[11px] font-mono">
-              {['cycles.jsonl', 'jobs.jsonl', 'usage-YYYY-MM'].map((f) => (
+              {['Your jobs', 'Your runs', 'Your spend'].map((f) => (
                 <span
                   key={f}
                   className="px-2 py-1 rounded bg-foreground/[0.04] border border-foreground/8 text-muted-foreground text-center truncate"
@@ -141,13 +140,13 @@ export function FeaturesBento() {
 
           {/* Tile 5 — Cap-aware */}
           <BentoTile className="col-span-12 lg:col-span-4 p-6">
-            <TileEyebrow icon={ShieldCheck}>Cap-aware</TileEyebrow>
+            <TileEyebrow icon={ShieldCheck}>Set a budget. It sticks.</TileEyebrow>
             <h3 className="text-[20px] font-medium tracking-tight mt-2 mb-1">
-              Enforced, not advisory.
+              Won’t surprise your card.
             </h3>
             <p className="text-[13.5px] text-muted-foreground leading-relaxed">
-              When the monthly SerpApi count hits the cap, discovery just stops.
-              Logs it. Won't blow your quota at 3am.
+              You set a monthly cap on searches. The moment Jobhound hits it,
+              it stops — full stop. No runaway bill while you sleep.
             </p>
             <div className="mt-5 h-2 rounded-full bg-foreground/[0.06] overflow-hidden">
               <div className="h-full w-[62%] rounded-full bg-gradient-to-r from-brand to-brand/60 relative">
@@ -155,8 +154,8 @@ export function FeaturesBento() {
               </div>
             </div>
             <div className="mt-1.5 flex justify-between text-[10.5px] font-mono text-muted-foreground/80">
-              <span>62 used</span>
-              <span>cap 100</span>
+              <span>62 of 100 used</span>
+              <span>sample</span>
             </div>
           </BentoTile>
 
@@ -164,25 +163,23 @@ export function FeaturesBento() {
           <BentoTile className="col-span-12 p-6 sm:p-8">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
               <div className="max-w-xl">
-                <TileEyebrow icon={Repeat}>Hot config</TileEyebrow>
+                <TileEyebrow icon={Repeat}>Change your mind</TileEyebrow>
                 <h3 className="text-[22px] sm:text-[26px] font-medium tracking-tight mt-2 mb-1.5">
-                  Edit on the fly. No restart.
+                  Tweak it any time. No restart.
                 </h3>
                 <p className="text-[14px] text-muted-foreground leading-relaxed">
-                  Every cycle re-reads{' '}
-                  <span className="font-mono text-foreground/85">config.json</span> — change
-                  a query, tweak the score threshold, and it picks up on the
-                  next pass. Roll out a new fit profile mid-day; the hound never
-                  notices the swap.
+                  Update your resume, add a new role, raise the bar on what
+                  counts as a match — Jobhound picks it up on the next run.
+                  No buttons to push, nothing to redeploy.
                 </p>
               </div>
               <div className="flex items-center gap-5">
                 <div className="hidden sm:flex flex-col items-end gap-1 text-right">
                   <span className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-muted-foreground/80">
-                    Reads per cycle
+                    Re-reads
                   </span>
                   <span className="text-[28px] font-medium tracking-tight tabular-nums">
-                    1×
+                    every run
                   </span>
                 </div>
                 <div className="hidden sm:flex shrink-0 items-center justify-center size-20 rounded-xl bg-foreground/[0.03] ring-1 ring-inset ring-foreground/10">
@@ -252,16 +249,18 @@ function PulsingDot() {
 }
 
 function FeedLine({
+  ts,
   kind,
   msg,
   highlight,
 }: {
-  kind: 'cycle' | 'found' | 'skip' | 'score' | 'finish';
+  ts: string;
+  kind: 'search' | 'found' | 'skip' | 'score' | 'finish';
   msg: string;
   highlight?: string;
 }) {
   const tone = {
-    cycle: 'text-foreground/70',
+    search: 'text-foreground/70',
     found: 'text-amber-300/90',
     skip: 'text-muted-foreground/60',
     score: 'text-emerald-300/90',
@@ -269,7 +268,7 @@ function FeedLine({
   }[kind];
   return (
     <li className="grid grid-cols-[64px_72px_1fr] gap-3">
-      <span className="text-muted-foreground/50">11:26:1{Math.floor(Math.random() * 9)}</span>
+      <span className="text-muted-foreground/50">{ts}</span>
       <span className={cn('font-medium', tone)}>{kind}</span>
       <span className="text-foreground/80 truncate">
         {msg}

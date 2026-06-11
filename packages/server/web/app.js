@@ -55,13 +55,50 @@ const els = {
   // cycles
   cyclesBody: $('cycles-body'),
 
+  // jobs
+  navJobsCount: $('nav-jobs-count'),
+  jobsList: $('jobs-list'),
+  jobsEmpty: $('jobs-empty'),
+  jobsListMeta: $('jobs-list-meta'),
+  jobsSearch: $('jobs-search'),
+  jobsRefresh: $('btn-jobs-refresh'),
+  jobsExport: $('btn-jobs-export'),
+  jobsDatePills: $('jobs-date-pills'),
+  jobsDateRange: $('jobs-date-range'),
+  jobsDateFrom: $('jobs-date-from'),
+  jobsDateTo: $('jobs-date-to'),
+  jobsDateCustomLabel: $('jobs-date-custom-label'),
+  jobsStatTotal: $('jobs-stat-total'),
+  jobsStatAvg: $('jobs-stat-avg'),
+
   // config
   cfgContent: $('cfg-content'),
   btnReloadConfig: $('btn-reload-config'),
+
+  // job drawer
+  drawer: $('job-drawer'),
+  drawerBackdrop: $('job-drawer-backdrop'),
+  drawerClose: $('jd-close'),
+  drawerBody: $('jd-body'),
+  drawerOpen: $('jd-open'),
+  drawerNoLink: $('jd-no-link'),
+  jdRing: $('jd-ring'),
+  jdScore: $('jd-score'),
+  jdTitle: $('jd-title'),
+  jdCompany: $('jd-company'),
+  jdSource: $('jd-source'),
 };
 
-const ROUTES = ['overview', 'activity', 'cycles', 'config'];
+const ROUTES = ['overview', 'jobs', 'activity', 'cycles', 'config'];
 const MAX_FEED_ITEMS = 300;
+const MAX_JOBS_ROWS = 500;
+
+// per-job aggregated state, keyed by job_id. Built from /api/jobs + live SSE.
+const jobsById = new Map();
+let jobsQuery = '';
+let jobsDateRange = 'today';   // 'today' | '24h' | '7d' | '30d' | 'all' | 'custom'
+let jobsDateFrom = '';         // YYYY-MM-DD when jobsDateRange === 'custom'
+let jobsDateTo = '';
 
 const cycleCounts = blankCounts();
 let activeCycleId = null;
@@ -75,25 +112,6 @@ const STATUS_COLORS = {
   idle:     'bg-sky-500',
   running:  'bg-emerald-500 animate-pulse-soft',
   stopping: 'bg-amber-500 animate-pulse-soft',
-};
-
-const STATUS_LABEL_COLOR = {
-  paused:   'text-ink-700',
-  idle:     'text-sky-700',
-  running:  'text-emerald-700',
-  stopping: 'text-amber-700',
-};
-
-const ACTION_BADGES = {
-  found:           'bg-sky-50 text-sky-700 ring-sky-200',
-  'skipped-known': 'bg-ink-50 text-ink-500 ring-ink-200',
-  analyzed:        'bg-violet-50 text-violet-700 ring-violet-200',
-  scored:          'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  filtered:        'bg-amber-50 text-amber-700 ring-amber-200',
-  errored:         'bg-rose-50 text-rose-700 ring-rose-200',
-  'cycle:start':   'bg-sky-50 text-sky-700 ring-sky-200',
-  'cycle:finish':  'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  'cycle:error':   'bg-rose-50 text-rose-700 ring-rose-200',
 };
 
 // ---------- router ----------
@@ -112,6 +130,7 @@ function showRoute(route) {
   });
   if (route === 'cycles') refreshCycles();
   if (route === 'config') refreshConfig();
+  if (route === 'jobs') refreshJobs();
 }
 
 window.addEventListener('hashchange', () => showRoute(currentRoute()));
@@ -126,6 +145,45 @@ els.btnClear.addEventListener('click', () => {
   els.feedEmpty.hidden = false;
 });
 els.btnReloadConfig.addEventListener('click', () => refreshConfig());
+
+if (els.jobsRefresh) els.jobsRefresh.addEventListener('click', () => refreshJobs());
+if (els.jobsExport) els.jobsExport.addEventListener('click', () => exportJobsCsv());
+if (els.jobsSearch) {
+  els.jobsSearch.addEventListener('input', (e) => {
+    jobsQuery = e.target.value || '';
+    paintJobs();
+  });
+}
+if (els.jobsDatePills) {
+  els.jobsDatePills.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-date]');
+    if (!btn) return;
+    jobsDateRange = btn.dataset.date;
+    els.jobsDatePills.querySelectorAll('[data-date]').forEach((c) => c.classList.toggle('active', c === btn));
+    if (els.jobsDateRange) {
+      els.jobsDateRange.classList.toggle('hidden', jobsDateRange !== 'custom');
+      els.jobsDateRange.classList.toggle('flex',  jobsDateRange === 'custom');
+    }
+    if (els.jobsDateCustomLabel) {
+      els.jobsDateCustomLabel.textContent =
+        jobsDateRange === 'custom' && (jobsDateFrom || jobsDateTo)
+          ? `${jobsDateFrom || '…'} → ${jobsDateTo || '…'}`
+          : 'Custom';
+    }
+    paintJobs();
+  });
+}
+const onCustomDate = () => {
+  jobsDateFrom = els.jobsDateFrom?.value || '';
+  jobsDateTo   = els.jobsDateTo?.value   || '';
+  if (els.jobsDateCustomLabel) {
+    els.jobsDateCustomLabel.textContent =
+      (jobsDateFrom || jobsDateTo) ? `${jobsDateFrom || '…'} → ${jobsDateTo || '…'}` : 'Custom';
+  }
+  paintJobs();
+};
+if (els.jobsDateFrom) els.jobsDateFrom.addEventListener('change', onCustomDate);
+if (els.jobsDateTo)   els.jobsDateTo.addEventListener('change',   onCustomDate);
 
 async function post(path) {
   try {
@@ -155,7 +213,7 @@ function applyState(state) {
   // sidebar status pill
   els.statusDot.className = `h-2 w-2 rounded-full ${STATUS_COLORS[status] || STATUS_COLORS.paused}`;
   els.statusLabel.textContent = status;
-  els.statusLabel.className = `capitalize ${STATUS_LABEL_COLOR[status] || 'text-ink-700'}`;
+  els.statusLabel.className = 'capitalize text-ink-800';
   if (status === 'running' && state.current_cycle_id) {
     els.statusDetail.textContent = shortId(state.current_cycle_id);
   } else if (status === 'idle' && state.next_cycle_at) {
@@ -189,12 +247,7 @@ function applyState(state) {
   // cycle pipeline (activity page)
   els.cycleStatePill.textContent = status === 'running' ? 'running' : status;
   els.cycleStatePill.className =
-    'text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-md ' +
-    (status === 'running'
-      ? 'bg-emerald-100 text-emerald-700'
-      : status === 'stopping'
-        ? 'bg-amber-100 text-amber-700'
-        : 'bg-ink-100 text-ink-500');
+    'text-[10px] uppercase tracking-wider font-semibold text-ink-500';
   if (status === 'running' && state.current_cycle_id) {
     els.cycleMeta.textContent = `cycle ${shortId(state.current_cycle_id)} · started ${formatTime(state.current_cycle_started_at)}`;
   } else if (status === 'idle' && state.next_cycle_at) {
@@ -419,6 +472,325 @@ function monoSpan(s) {
   return `<span class="font-mono">${escapeText(s)}</span>`;
 }
 
+// ---------- jobs ----------
+
+async function refreshJobs() {
+  try {
+    const res = await fetch('/api/jobs-store');
+    if (!res.ok) return;
+    const { jobs } = await res.json();
+    jobsById.clear();
+    for (const j of jobs) jobsById.set(j.job_id, j);
+    paintJobs();
+  } catch (err) {
+    console.error('jobs fetch failed', err);
+  }
+}
+
+function isErrored(j) {
+  return typeof j.rationale === 'string' && j.rationale.startsWith('errored:');
+}
+
+function parseDDMMYYYY(s) {
+  if (!s || typeof s !== 'string') return NaN;
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return Date.parse(s);
+  return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])).getTime();
+}
+
+function currentJobsView() {
+  const all = Array.from(jobsById.values());
+  const q = jobsQuery.trim().toLowerCase();
+  const win = dateWindow();
+  const filtered = all.filter((j) => {
+    if (win) {
+      const t = parseDDMMYYYY(j.first_seen);
+      if (!Number.isFinite(t)) return false;
+      if (t < win.from || t >= win.to) return false;
+    }
+    if (!q) return true;
+    return (
+      (j.title    && j.title.toLowerCase().includes(q)) ||
+      (j.company  && j.company.toLowerCase().includes(q)) ||
+      (j.source   && j.source.toLowerCase().includes(q)) ||
+      (j.location && j.location.toLowerCase().includes(q))
+    );
+  });
+  filtered.sort((a, b) => {
+    const ta = parseDDMMYYYY(a.last_seen);
+    const tb = parseDDMMYYYY(b.last_seen);
+    if (ta !== tb) return tb - ta;
+    return (b.score ?? -1) - (a.score ?? -1);
+  });
+  return { all, filtered };
+}
+
+function paintJobs() {
+  const all = Array.from(jobsById.values());
+
+  let scoreSum = 0, scoreN = 0;
+  for (const j of all) {
+    if (typeof j.score === 'number') { scoreSum += j.score; scoreN++; }
+  }
+  els.jobsStatTotal.textContent = all.length;
+  els.jobsStatAvg.textContent   = scoreN ? Math.round(scoreSum / scoreN) : '—';
+
+  if (els.navJobsCount) els.navJobsCount.textContent = all.length ? String(all.length) : '';
+
+  const { filtered } = currentJobsView();
+  const trimmed = filtered.slice(0, MAX_JOBS_ROWS);
+  els.jobsListMeta.textContent =
+    `${trimmed.length} shown${filtered.length > trimmed.length ? ` of ${filtered.length}` : ''}`;
+
+  if (!trimmed.length) {
+    els.jobsList.innerHTML = '';
+    els.jobsEmpty.hidden = false;
+    return;
+  }
+  els.jobsEmpty.hidden = true;
+  els.jobsList.innerHTML = trimmed.map(renderJobRow).join('');
+}
+
+els.jobsList?.addEventListener('click', (e) => {
+  if (e.target.closest('a')) return;
+  const row = e.target.closest('[data-job-id]');
+  if (!row) return;
+  openJobDrawer(row.dataset.jobId);
+});
+
+function renderJobRow(j) {
+  const score = typeof j.score === 'number' ? Math.round(j.score) : null;
+  const cls = scoreClass(score);
+  const ring = `<div class="score-ring ${cls} h-11 w-11 rounded-full flex items-center justify-center shrink-0" style="--pct:${score ?? 0}">
+    <div class="h-[34px] w-[34px] rounded-full bg-white flex items-center justify-center">
+      <span class="text-[12px] font-semibold tabular ${cls}">${score ?? '—'}</span>
+    </div>
+  </div>`;
+
+  const titleHtml = escapeText(j.title || '(untitled)');
+
+  const meta = [j.source, j.location, formatSalary(j)].filter(Boolean).map(escapeText).join(' · ');
+
+  const errored = isErrored(j);
+  const rationale = errored ? j.rationale.replace(/^errored:\s*/, '') : j.rationale;
+
+  return `<li class="job-row px-6 py-3.5 grid grid-cols-[44px_1fr_auto] gap-4 items-center cursor-pointer" data-job-id="${escapeAttr(j.job_id)}">
+    ${ring}
+    <div class="min-w-0">
+      <div class="truncate text-[13.5px] font-semibold">${titleHtml}</div>
+      <div class="mt-0.5 text-[11.5px] text-ink-500 truncate">
+        <span class="font-medium text-ink-700">${escapeText(j.company || '—')}</span>
+        ${meta ? ` · ${meta}` : ''}
+      </div>
+      ${rationale ? `<div class="mt-1 text-[11.5px] truncate ${errored ? 'text-rose-600' : 'text-ink-500'}">${escapeText(rationale)}</div>` : ''}
+    </div>
+    <div class="text-[11px] text-ink-400 tabular text-right whitespace-nowrap hidden md:block">
+      <div>${escapeText(j.first_seen || '—')}</div>
+      ${j.posted_date ? `<div class="text-ink-300 mt-0.5">posted ${escapeText(j.posted_date)}</div>` : ''}
+    </div>
+  </li>`;
+}
+
+// ---------- job drawer ----------
+
+const AXIS_LABELS = {
+  skills_match: 'Skills',
+  seniority_match: 'Seniority',
+  location_match: 'Location',
+  comp_match: 'Compensation',
+  domain_match: 'Domain',
+  recency: 'Recency',
+};
+
+function openJobDrawer(jobId) {
+  const j = jobsById.get(jobId);
+  if (!j) return;
+  renderJobDrawer(j);
+  els.drawer.classList.add('open');
+  els.drawer.setAttribute('aria-hidden', 'false');
+  els.drawerBackdrop.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeJobDrawer() {
+  els.drawer.classList.remove('open');
+  els.drawer.setAttribute('aria-hidden', 'true');
+  els.drawerBackdrop.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+els.drawerClose?.addEventListener('click', closeJobDrawer);
+els.drawerBackdrop?.addEventListener('click', closeJobDrawer);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && els.drawer?.classList.contains('open')) closeJobDrawer();
+});
+
+function renderJobDrawer(j) {
+  const score = typeof j.score === 'number' ? Math.round(j.score) : null;
+  const cls = scoreClass(score);
+
+  els.jdRing.className = `score-ring ${cls} h-12 w-12 rounded-full flex items-center justify-center shrink-0`;
+  els.jdRing.style.setProperty('--pct', String(score ?? 0));
+  els.jdScore.textContent = score ?? '—';
+  els.jdScore.className = `text-[13px] font-semibold tabular ${cls}`;
+  els.jdTitle.textContent = j.title || '(untitled)';
+  els.jdCompany.textContent = j.company || '—';
+  els.jdSource.textContent = j.source || '—';
+
+  if (j.apply_url) {
+    els.drawerOpen.href = j.apply_url;
+    els.drawerOpen.classList.remove('hidden');
+    els.drawerNoLink.classList.add('hidden');
+  } else {
+    els.drawerOpen.classList.add('hidden');
+    els.drawerNoLink.classList.remove('hidden');
+  }
+
+  const errored = isErrored(j);
+  const rationale = errored ? j.rationale.replace(/^errored:\s*/, '') : j.rationale;
+
+  let breakdown = null;
+  if (j.breakdown) {
+    try { breakdown = JSON.parse(j.breakdown); } catch { breakdown = null; }
+  }
+
+  const meta = drawerSection('Posting', drawerKv([
+    ['Location', j.location || '—'],
+    ['Work mode', j.work_mode || '—'],
+    ['Seniority', j.seniority || '—'],
+    ['Salary', formatSalary(j) || '—'],
+    ['Source', j.source || '—'],
+    ['Posted', j.posted_date || '—'],
+    ['Status', j.status || '—'],
+    ['First seen', j.first_seen || '—'],
+    ['Last seen', j.last_seen || '—'],
+  ]));
+
+  const rationaleSection = rationale
+    ? drawerSection(errored ? 'Error' : 'Rationale',
+        `<p class="text-[13px] leading-relaxed ${errored ? 'text-rose-700' : 'text-ink-700'}">${escapeText(rationale)}</p>`)
+    : '';
+
+  const breakdownSection = breakdown ? renderBreakdownSection(breakdown) : '';
+
+  const idSection = drawerSection('Identifiers', `
+    <dl class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 text-[12px]">
+      <dt class="text-ink-500">job_id</dt>
+      <dd class="font-mono text-ink-800 break-all">${escapeText(j.job_id)}</dd>
+      ${j.apply_url ? `
+        <dt class="text-ink-500">apply_url</dt>
+        <dd class="text-ink-800 break-all"><a href="${escapeAttr(j.apply_url)}" target="_blank" rel="noopener" class="text-sky-700 hover:underline">${escapeText(j.apply_url)}</a></dd>
+      ` : ''}
+    </dl>
+  `);
+
+  els.drawerBody.innerHTML = meta + rationaleSection + breakdownSection + idSection;
+  els.drawerBody.scrollTop = 0;
+}
+
+function renderBreakdownSection(b) {
+  const axes = b.axes || {};
+  const rows = Object.keys(AXIS_LABELS)
+    .filter((k) => axes[k])
+    .map((k) => {
+      const a = axes[k];
+      const s = Math.max(0, Math.min(100, Math.round(a.score ?? 0)));
+      return `<div class="space-y-1">
+        <div class="flex items-center justify-between text-[12px]">
+          <span class="text-ink-700 font-medium">${AXIS_LABELS[k]}</span>
+          <span class="tabular text-ink-500">${s}</span>
+        </div>
+        <div class="axis-bar"><span style="width:${s}%"></span></div>
+        ${a.note ? `<div class="text-[11.5px] text-ink-500 leading-relaxed">${escapeText(a.note)}</div>` : ''}
+      </div>`;
+    })
+    .join('');
+
+  const deal = (b.deal_breakers && b.deal_breakers.length)
+    ? `<div class="mt-4 rounded-md bg-rose-50 border border-rose-200 px-3 py-2.5">
+        <div class="text-[10px] uppercase tracking-wider text-rose-700 font-semibold mb-1">Deal-breakers</div>
+        <ul class="text-[12px] text-rose-700 space-y-0.5 list-disc pl-4">${b.deal_breakers.map((d) => `<li>${escapeText(d)}</li>`).join('')}</ul>
+      </div>`
+    : '';
+
+  const head = `<div class="flex items-center justify-between mb-3 text-[12px]">
+    <span class="text-ink-500">Final score</span>
+    <span class="tabular font-semibold text-ink-800">${Math.round(b.final_score ?? 0)} · ${escapeText(b.confidence || '—')} confidence</span>
+  </div>`;
+
+  return drawerSection('Score breakdown', head + `<div class="space-y-3.5">${rows}</div>` + deal);
+}
+
+function drawerSection(title, bodyHtml) {
+  return `<section>
+    <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-2.5">${escapeText(title)}</div>
+    ${bodyHtml}
+  </section>`;
+}
+
+function drawerKv(rows) {
+  return `<dl class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 text-[13px]">${rows
+    .map(([k, v]) => `<dt class="text-ink-500">${escapeText(k)}</dt><dd class="text-ink-800">${escapeText(v)}</dd>`)
+    .join('')}</dl>`;
+}
+
+function formatSalary(j) {
+  if (j.salary_min == null && j.salary_max == null) return '';
+  if (j.salary_min != null && j.salary_max != null) return `${formatNumber(j.salary_min)}–${formatNumber(j.salary_max)}`;
+  return formatNumber(j.salary_min ?? j.salary_max);
+}
+
+function exportJobsCsv() {
+  const { filtered } = currentJobsView();
+  const cols = ['job_id', 'title', 'company', 'location', 'work_mode', 'salary_min', 'salary_max', 'seniority', 'source', 'apply_url', 'posted_date', 'score', 'status', 'rationale', 'first_seen', 'last_seen'];
+  const rows = [cols.join(',')];
+  for (const j of filtered) {
+    rows.push(cols.map((c) => csvCell(j[c])).join(','));
+  }
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `jobhound-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function csvCell(v) {
+  if (v == null) return '';
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function dateWindow() {
+  const now = Date.now();
+  if (jobsDateRange === 'all') return null;
+  if (jobsDateRange === 'today') {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    return { from: start.getTime(), to: now + 1 };
+  }
+  if (jobsDateRange === '24h') return { from: now - 24 * 3600_000,      to: now + 1 };
+  if (jobsDateRange === '7d')  return { from: now - 7  * 24 * 3600_000, to: now + 1 };
+  if (jobsDateRange === '30d') return { from: now - 30 * 24 * 3600_000, to: now + 1 };
+  if (jobsDateRange === 'custom') {
+    const from = jobsDateFrom ? new Date(jobsDateFrom + 'T00:00:00').getTime() : -Infinity;
+    const to   = jobsDateTo   ? new Date(jobsDateTo   + 'T23:59:59.999').getTime() : Infinity;
+    if (!Number.isFinite(from) && !Number.isFinite(to)) return null;
+    return { from, to };
+  }
+  return null;
+}
+
+function scoreClass(score) {
+  if (score == null) return 'score-none';
+  if (score >= 80) return 'score-strong';
+  if (score >= 60) return 'score-good';
+  if (score >= 40) return 'score-mid';
+  return 'score-weak';
+}
+
 // ---------- pipeline counters ----------
 
 function resetPipelineCounters() {
@@ -462,7 +834,7 @@ function applyCycleFinishToCounters(c) {
 
 // ---------- feed ----------
 
-function pushFeed({ kind, action, title, sub, meta, accent }) {
+function pushFeed({ action, title, sub, meta }) {
   if (action === 'skipped-known' && !els.filterKnown.checked) return;
   els.feedEmpty.hidden = true;
   const ts = new Date().toISOString().slice(11, 19);
@@ -470,9 +842,9 @@ function pushFeed({ kind, action, title, sub, meta, accent }) {
   li.className = 'px-6 py-2.5 grid grid-cols-[64px_110px_1fr_auto] gap-3 items-center text-xs';
   li.innerHTML = `
     <span class="font-mono text-[11px] text-ink-400 tabular">${ts}</span>
-    <span class="inline-flex items-center justify-center rounded-md ring-1 ring-inset px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${ACTION_BADGES[kind] || 'bg-ink-50 text-ink-500 ring-ink-200'}">${escapeText(action)}</span>
+    <span class="text-[11px] text-ink-500 font-medium uppercase tracking-wider truncate">${escapeText(action)}</span>
     <div class="min-w-0">
-      <div class="truncate ${accent ?? 'text-ink-800'} font-medium"></div>
+      <div class="truncate text-ink-800 font-medium"></div>
       <div class="truncate text-ink-400 text-[11px]"></div>
     </div>
     <span class="text-ink-500 font-mono text-[11px] tabular text-right whitespace-nowrap"></span>
@@ -513,11 +885,9 @@ function connectStream() {
     resetPipelineCounters();
     els.cycleMeta.textContent = `cycle ${shortId(p.cycle_id)} · ${p.queries} queries · ${p.model}`;
     pushFeed({
-      kind: 'cycle:start',
       action: 'cycle start',
       title: `started cycle ${shortId(p.cycle_id)}`,
       sub: `${p.queries} queries · ${p.model}`,
-      accent: 'text-sky-700',
     });
   });
 
@@ -526,14 +896,13 @@ function connectStream() {
     applyCycleFinishToCounters(p);
     activeCycleId = null;
     pushFeed({
-      kind: 'cycle:finish',
       action: 'cycle done',
       title: `finished cycle ${shortId(p.cycle_id)}`,
       sub: `found ${p.found} · new ${p.new} · inserted ${p.inserted} · filtered ${p.filtered} · errored ${p.errored}`,
       meta: `${formatDurationMs(p.duration_ms)} · $${(p.cost_usd ?? 0).toFixed(4)}`,
-      accent: 'text-emerald-700',
     });
     if (currentRoute() === 'cycles') refreshCycles();
+    refreshJobs();
     refreshState();
   });
 
@@ -541,11 +910,9 @@ function connectStream() {
     const p = JSON.parse(ev.data);
     activeCycleId = null;
     pushFeed({
-      kind: 'cycle:error',
       action: 'cycle error',
       title: p.error,
       sub: shortId(p.cycle_id),
-      accent: 'text-rose-700',
     });
   });
 
@@ -554,7 +921,7 @@ function connectStream() {
     bumpFromJobEvent(p);
     const where = [p.company, p.via].filter(Boolean).join(' · ');
     const title = p.title || p.job_id || '(no title)';
-    pushFeed({ kind: p.action, action: p.action, title, sub: where, meta: jobEventMeta(p) });
+    pushFeed({ action: p.action, title, sub: where, meta: jobEventMeta(p) });
   });
 
   src.addEventListener('usage', (ev) => {
@@ -617,5 +984,6 @@ function escapeText(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/
 if (!location.hash) location.hash = '#/overview';
 showRoute(currentRoute());
 refreshState();
+refreshJobs();
 connectStream();
 setInterval(refreshState, 30_000);

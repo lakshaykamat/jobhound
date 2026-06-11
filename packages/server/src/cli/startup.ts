@@ -2,7 +2,7 @@ import { existsSync } from 'fs';
 import { loadConfig, AppConfig } from '../config';
 import { logger } from '../logger';
 
-const REQUIRED_ENV = ['APPS_SCRIPT_URL', 'APPS_SCRIPT_TOKEN', 'SERPAPI_KEY', 'OPENAI_KEY'];
+const REQUIRED_ENV = ['SERPAPI_KEY', 'OPENAI_KEY'];
 
 export interface StartupCheck {
   configPath: string;
@@ -35,10 +35,6 @@ export function validateStartup(opts: StartupCheck): StartupResult {
     const v = process.env[k];
     if (!v) errors.push(`env var ${k} is required`);
     else env[k] = v;
-  }
-
-  if (env.APPS_SCRIPT_URL && !/^https:\/\/script\.google\.com\//.test(env.APPS_SCRIPT_URL)) {
-    errors.push('APPS_SCRIPT_URL must be a https://script.google.com/... /exec URL');
   }
 
   let config: AppConfig | null = null;

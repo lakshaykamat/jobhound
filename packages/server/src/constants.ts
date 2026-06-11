@@ -13,17 +13,10 @@ export const SERPAPI_BACKOFF_MAX_MS = 8000;
 export const OPENAI_MAX_ATTEMPTS = 4;
 export const OPENAI_BACKOFF_BASE_MS = 1000;
 export const OPENAI_BACKOFF_MAX_MS = 8000;
-export const APPS_SCRIPT_MAX_ATTEMPTS = 4;
-export const APPS_SCRIPT_BACKOFF_BASE_MS = 1000;
-export const APPS_SCRIPT_BACKOFF_MAX_MS = 8000;
 
 // --- Server plumbing (fixed) ---
 
 export const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
-
-// --- Sheets bridge (fixed) ---
-
-export const SHEET_UPSERT_CHUNK_SIZE = 100;
 
 // --- Domain enums ---
 

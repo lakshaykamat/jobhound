@@ -3,7 +3,7 @@ import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { processCycle } from '../../src/core/process-cycle';
-import { JobsSheet } from '../../src/adapters/sheets';
+import { JobsStore } from '../../src/adapters/jobs-store';
 import { Tracker } from '../../src/adapters/tracker';
 import { JobRecord } from '../../src/types';
 import { makeConfig } from '../_helpers/factories';
@@ -22,19 +22,16 @@ import { chat } from '../../src/adapters/llm';
 const mockFindJobs = vi.mocked(findJobs);
 const mockChat = vi.mocked(chat);
 
-function makeFakeSheet(existing: JobRecord[] = []) {
+function makeFakeStore(existing: JobRecord[] = []) {
   const written: JobRecord[] = [];
-  const sheet = {
-    ensureHeader: vi.fn().mockResolvedValue(undefined),
+  const store = {
     readAll: vi.fn().mockResolvedValue(existing),
     upsertBatch: vi.fn(async (records: JobRecord[]) => {
       written.push(...records);
       return { inserted: records.length, updated: 0 };
     }),
-    bulkImport: vi.fn(),
-    selfTest: vi.fn(),
-  } as unknown as JobsSheet;
-  return { sheet, written };
+  } as unknown as JobsStore;
+  return { store, written };
 }
 
 function rawPosting(over: Partial<{ title: string; company: string; via: string; description: string; posted_at: string | null }> = {}) {
@@ -96,12 +93,12 @@ describe('processCycle', () => {
     mockChat.mockResolvedValueOnce(scoreResponse(50));
 
     const cfg = makeConfig({ openai: { llm_concurrency: 1, model: 'gpt-4o-mini' } });
-    const { sheet, written } = makeFakeSheet([]);
+    const { store, written } = makeFakeStore([]);
     const tracker = new Tracker(tmp);
 
     const summary = await processCycle(
       cfg,
-      sheet,
+      store,
       { serpapi: 'k', openai: 'k' },
       tracker,
       'cycle-1',
@@ -145,12 +142,12 @@ describe('processCycle', () => {
         first_seen: 't', last_seen: 't',
       },
     ];
-    const { sheet } = makeFakeSheet(existing);
+    const { store } = makeFakeStore(existing);
     const tracker = new Tracker(tmp);
 
     const summary = await processCycle(
       makeConfig(),
-      sheet,
+      store,
       { serpapi: 'k', openai: 'k' },
       tracker,
       'cycle-2',
@@ -175,10 +172,10 @@ describe('processCycle', () => {
     });
     mockChat.mockResolvedValueOnce(scoreResponse(80));
 
-    const { sheet, written } = makeFakeSheet([]);
+    const { store, written } = makeFakeStore([]);
     const summary = await processCycle(
       makeConfig({ cycle: { max_job_age_days: 7 } }),
-      sheet,
+      store,
       { serpapi: 'k', openai: 'k' },
       new Tracker(tmp),
       'cycle-3',
@@ -204,10 +201,10 @@ describe('processCycle', () => {
     // The single chat call is the scorer, and we fail it.
     mockChat.mockRejectedValueOnce(new Error('scorer offline'));
 
-    const { sheet, written } = makeFakeSheet([]);
+    const { store, written } = makeFakeStore([]);
     const summary = await processCycle(
       makeConfig({ openai: { llm_concurrency: 1, model: 'gpt-4o-mini' } }),
-      sheet,
+      store,
       { serpapi: 'k', openai: 'k' },
       new Tracker(tmp),
       'cycle-4',
@@ -227,10 +224,10 @@ describe('processCycle', () => {
       queriesFailed: 0,
       quotaExhausted: false,
     });
-    const { sheet, written } = makeFakeSheet([]);
+    const { store, written } = makeFakeStore([]);
     const summary = await processCycle(
       makeConfig(),
-      sheet,
+      store,
       { serpapi: 'k', openai: 'k' },
       new Tracker(tmp),
       'cycle-5',
@@ -238,7 +235,7 @@ describe('processCycle', () => {
     expect(summary.found).toBe(0);
     expect(summary.scored).toBe(0);
     expect(written).toHaveLength(0);
-    expect(sheet.upsertBatch).toHaveBeenCalledWith([]);
+    expect(store.upsertBatch).toHaveBeenCalledWith([]);
   });
 
   it('processes multiple postings concurrently up to the configured limit', async () => {
@@ -264,9 +261,9 @@ describe('processCycle', () => {
     });
 
     const cfg = makeConfig({ openai: { llm_concurrency: 2, model: 'gpt-4o-mini' } });
-    const { sheet, written } = makeFakeSheet([]);
+    const { store, written } = makeFakeStore([]);
     const promise = processCycle(
-      cfg, sheet, { serpapi: 'k', openai: 'k' }, new Tracker(tmp), 'cycle-6',
+      cfg, store, { serpapi: 'k', openai: 'k' }, new Tracker(tmp), 'cycle-6',
     );
     await vi.runAllTimersAsync();
     const summary = await promise;

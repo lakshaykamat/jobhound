@@ -46,8 +46,8 @@ export function CtaSection() {
               <span className="italic font-serif text-muted-foreground">Then go to lunch.</span>
             </h2>
             <p className="mt-5 text-[16px] text-muted-foreground leading-relaxed">
-              The server boots paused. Open the dashboard, click Start, and ignore
-              it for the next six hours.
+              Three commands, then open the dashboard. Click Start and go do
+              something else — it’ll have a shortlist by lunch.
             </p>
           </div>
 
@@ -92,7 +92,7 @@ export function CtaSection() {
               <div className="flex">
                 <span className="text-muted-foreground/40 select-none w-6 shrink-0" />
                 <span className="text-muted-foreground/60">
-                  state=paused — open the UI to begin
+                  ready — open the dashboard to begin
                   <span className="animate-caret">▌</span>
                 </span>
               </div>

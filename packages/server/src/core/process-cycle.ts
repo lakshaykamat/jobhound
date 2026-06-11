@@ -1,6 +1,6 @@
 import { AppConfig } from '../config';
 import { JobRecord } from '../types';
-import { JobsSheet } from '../adapters/sheets';
+import { JobsStore } from '../adapters/jobs-store';
 import { findJobs } from '../adapters/serpapi';
 import { Tracker } from '../adapters/tracker';
 import { costUsd } from '../pricing';
@@ -37,18 +37,15 @@ interface ProcessedPosting {
 
 export async function processCycle(
   config: AppConfig,
-  sheet: JobsSheet,
+  store: JobsStore,
   secrets: Secrets,
   tracker: Tracker,
   cycleId: string,
   log: Logger = rootLogger.child({ cycle_id: cycleId }),
 ): Promise<CycleSummary> {
-  log.debug('ensuring sheet header');
-  await sheet.ensureHeader();
-
-  log.debug('reading existing rows from sheet');
-  const existing = await sheet.readAll();
-  log.info('sheet read complete', { existing_rows: existing.length });
+  log.debug('reading existing rows from local store');
+  const existing = await store.readAll();
+  log.info('store read complete', { existing_rows: existing.length });
 
   log.info('discovery starting', {
     queries: config.cycle.queries,
@@ -113,8 +110,8 @@ export async function processCycle(
     upsertRecords.push(p.record);
   }
 
-  log.info('writing upsert batch to sheet', { records: upsertRecords.length });
-  const written = await sheet.upsertBatch(upsertRecords);
+  log.info('writing upsert batch to store', { records: upsertRecords.length });
+  const written = await store.upsertBatch(upsertRecords);
   log.info('upsert complete', { inserted: written.inserted, updated: written.updated });
 
   return {

@@ -1,12 +1,11 @@
 # Jobhound
 
-Local HTTP server with a Tailwind dashboard at `http://localhost:8787`. Boots paused; the UI exposes Start / Stop / Run-once controls and streams live cycle + job events via SSE. A cycle: discover jobs (SerpApi Google Jobs) → analyze → score against resume profile → upsert to Google Sheet. Cost & usage tracking is local. Full spec in `docs/prd.md`.
+Local HTTP server with a Tailwind dashboard at `http://localhost:8787`. Boots paused; the UI exposes Start / Stop / Run-once controls and streams live cycle + job events via SSE. A cycle: discover jobs (SerpApi Google Jobs) → analyze → score against resume profile → upsert to the local jobs store. Cost & usage tracking is local. Full spec in `docs/prd.md`.
 
 ## Hard constraints
 
-- **Sheet is the jobs database.** Job rows only. No other state in the Sheet.
-- **`.data/` is the local meters & observability store.** `cycles.jsonl` (one line per cycle), `jobs.jsonl` (one line per find/analyze/score/error event), `usage-YYYY-MM.json` (running SerpApi/token/USD totals for the month — drives cap enforcement), `last-cycle.json` (epoch ms of the last cycle attempt). Append-only JSONL + per-month/single JSON. No other persistence layer (no Redis/SQLite). If `.data/` is wiped, the server forgets month-to-date usage (cap meter resets) and forgets the last-cycle timestamp. Mount as a volume in production.
-- **`process_cycle` reads Sheet → does work → writes Sheet + appends to `.data/`.** Crash-safe via append-only writes.
+- **All data lives in `.data/`.** `jobs.json` is the jobs database (full `JobRecord` rows — read whole, atomic `.tmp + rename` writes). `cycles.jsonl` (one line per cycle), `jobs.jsonl` (one line per find/analyze/score/error event), `usage-YYYY-MM.json` (running SerpApi/token/USD totals for the month — drives cap enforcement), `last-cycle.json` (epoch ms of the last cycle attempt). No external persistence (no Google Sheet, Redis, SQLite). If `.data/` is wiped, the server forgets every job, month-to-date usage, and the last-cycle timestamp. Mount `./packages/server/.data:/app/.data` in docker-compose so data survives container restarts.
+- **`process_cycle` reads `jobs.json` → does work → writes `jobs.json` + appends to event/cycle JSONL.** Crash-safe via append-only writes for events; jobs file is rewritten atomically.
 - **Idempotent via `job_id`** = hash(`normalized_title + company + via`). Upsert, never duplicate.
 - **Dedup before LLM.** Known `job_id` skips Analyze/Score, just bumps `last_seen` and emits a `skipped-known` event.
 - **API-only discovery.** No logged-in scraping.
@@ -23,6 +22,6 @@ Write simple, readable code prioritizing clarity over cleverness with self-expla
 
 Cross-source dedup rule · hosting target · scorer calibration. Flag, don't silently resolve.
 
-(Resolved: **write-once sheet semantics**. The server writes a row when it first sees + scores a posting. After that it never touches the row — no `last_seen` bumps, no staleness sweep, no status mutation. Known `job_id`s are read for dedup only; the user owns the row state from then on.)
+(Resolved: **write-once row semantics**. The server writes a row when it first sees + scores a posting. After that it never touches the row — no `last_seen` bumps, no staleness sweep, no status mutation. Known `job_id`s are read for dedup only; the user owns the row state from then on.)
 
 (Resolved: **server starts paused**. `src/cli/server.ts` boots the HTTP listener but does NOT auto-start the cycle loop. The UI POSTs `/api/start`, `/api/stop`, `/api/run-once`. SSE on `/api/events` broadcasts `state`, `cycle:start`, `cycle:finish`, `cycle:error`, `job`, and `usage` events. The UI lives in `web/` as a single Tailwind-CDN HTML page + `app.js` — no build step.)
