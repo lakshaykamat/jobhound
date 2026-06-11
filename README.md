@@ -1,9 +1,9 @@
 # Jobhound
 
-Finds job postings, scores them against your resume, drops the good ones into a Google Sheet. One operator, one resume, one Sheet.
+Finds job postings, scores them against your resume, and keeps the good ones in a local jobs store you browse from a dashboard. One operator, one resume, one machine.
 
 ```
-SerpApi Google Jobs  →  dedup vs. Sheet  →  score new ones  →  write to Sheet
+SerpApi Google Jobs  →  dedup vs. jobs store  →  score new ones  →  write to jobs store
 ```
 
 Dashboard runs at `http://localhost:8787` with Start / Stop / Run-once buttons and a live event feed. The server boots paused so it won't burn your SerpApi quota while you're still setting things up.
@@ -16,17 +16,17 @@ Design rationale lives in [`docs/prd.md`](docs/prd.md). Setup steps are in [`doc
 - Hashes `title + company + via` into a `job_id` and skips anything it's already seen — known postings never hit the LLM.
 - Drops postings older than `max_job_age_days` (default 7).
 - Sends what's left through GPT for a 0–100 fit score and a one-liner.
-- Writes the row once. After that the row is yours — mark it `applied`, delete it, whatever. The server won't touch it again.
+- Writes the row once into `.data/jobs.json`. After that the row is yours — mark it `applied`, delete it, whatever. The server won't touch it again.
 - Tracks SerpApi searches, tokens, and USD locally in `.data/`. Stops calling SerpApi when you hit `monthly_search_cap`.
 
 ## A cycle
 
 ```
 1. Run each saved query (~10 results per page)
-2. Drop anything already in the Sheet
+2. Drop anything already in the local jobs store
 3. Drop anything older than the cutoff
 4. Score what's left against your resume profile
-5. Append new rows to the Sheet
+5. Append new rows to .data/jobs.json (atomic .tmp + rename)
 6. Log the cost, sleep until next cycle
 ```
 
@@ -40,23 +40,25 @@ This is a pnpm workspace with two packages:
 packages/
 ├── server/                  # the daemon — pulls, scores, writes
 │   ├── src/
-│   │   ├── adapters/        # llm, serpapi, sheets, tracker
-│   │   ├── cli/             # server.ts (pnpm start), verify-sheet.ts
-│   │   ├── core/            # process-cycle, scoring, dedup, profile, state machine, event bus
+│   │   ├── adapters/        # jobs-store, llm, serpapi, tracker, retry
+│   │   ├── cli/             # server.ts (pnpm start), startup.ts
+│   │   ├── core/            # process-cycle, dedup, score, analyze, profile,
+│   │   │                    # posted-at, event-bus, server-state, observable-tracker
 │   │   ├── config.ts
+│   │   ├── constants.ts     # model id lives here
 │   │   ├── pricing.ts       # hardcoded $/1M token prices — update when OpenAI changes them
+│   │   ├── prompts.ts
+│   │   ├── logger.ts
 │   │   └── types.ts
 │   ├── web/                 # Tailwind-CDN dashboard, no build step
-│   ├── apps-script/         # Google Sheets bridge, deploy as a Web App
 │   ├── tests/               # vitest unit + integration suite
 │   ├── config.json          # gitignored — your queries + fit_profile
-│   ├── .data/               # local meters + event logs (gitignored, mount as volume)
+│   ├── .data/               # local jobs store + meters + event logs (gitignored, mount as volume)
 │   └── Dockerfile           # multi-stage; build context is the REPO ROOT
-└── landing/                 # marketing site (zero-dep static page)
+└── landing/                 # marketing site — Vite + React + TS + Tailwind v4 + shadcn primitives
     ├── index.html
-    ├── styles.css
-    ├── script.js
-    └── serve.mjs            # 30-line node static server
+    ├── src/
+    └── vite.config.ts
 ```
 
 From the repo root:
@@ -66,7 +68,8 @@ pnpm install                        # one-shot, picks up both packages
 pnpm start                          # boots the server (paused) on :8787
 pnpm typecheck                      # tsc on the server
 pnpm test                           # vitest on the server
-pnpm landing                        # opens the landing page on :4173
+pnpm landing                        # vite dev server for the landing page
+pnpm landing:build                  # production build of the landing page
 ```
 
 ## Config
@@ -95,15 +98,15 @@ Everything else has defaults that work:
 
 | Var | What |
 |---|---|
-| `APPS_SCRIPT_URL` | `/exec` URL of your Apps Script Web App. |
-| `APPS_SCRIPT_TOKEN` | Shared secret, stored as `SHARED_TOKEN` in Apps Script. |
 | `SERPAPI_KEY` | From [serpapi.com](https://serpapi.com). Free tier is 100/mo. |
-| `OPENAI_KEY` | Model is set in `packages/server/src/constants.ts`, prices in `packages/server/src/pricing.ts`. |
+| `OPENAI_KEY` | Model id in `packages/server/src/constants.ts`, prices in `packages/server/src/pricing.ts`. |
 | `DATA_DIR` | Where `.data/` lives. Defaults to `./.data` (cwd-relative) locally, `/app/.data` in Docker. |
+| `PORT` | Override the dashboard port (default `8787`). |
+| `LOG_LEVEL` / `LOG_FORMAT` | Logger knobs. Defaults are sensible. |
 
 ## Constraints (don't break these)
 
-- Sheet holds jobs. `.data/` holds meters and events. No other persistence.
+- All data lives in `.data/`. `jobs.json` is the jobs database (full rows, atomic writes); `cycles.jsonl`, `jobs.jsonl`, `usage-YYYY-MM.json`, and `last-cycle.json` hold the event log and meters. No external persistence — no Sheet, no Redis, no SQLite.
 - Write-once. The server never edits an existing row. Re-seeing a known `job_id` just emits a `skipped-known` event.
 - Dedup runs before the LLM. Known postings cost zero tokens.
 - API only. No logged-in scraping.
