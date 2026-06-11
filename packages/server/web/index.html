@@ -136,38 +136,47 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* Score color helpers — set as CSS var, used by score-ring + text. Pure grayscale. */
-    .score-strong { --col: #fafafa; color: #fafafa; }
-    .score-good   { --col: #d4d4d4; color: #d4d4d4; }
-    .score-mid    { --col: #a3a3a3; color: #a3a3a3; }
-    .score-weak   { --col: #737373; color: #a3a3a3; }
+    /* Score color helpers — set as CSS var, used by score-ring + text. Green→yellow→red. */
+    .score-strong { --col: #22c55e; color: #4ade80; }
+    .score-good   { --col: #84cc16; color: #a3e635; }
+    .score-mid    { --col: #eab308; color: #facc15; }
+    .score-weak   { --col: #ef4444; color: #f87171; }
     .score-none   { --col: #404040; color: #737373; }
+
+    /* Job card — sits inside the surface; subtle elevation via lighter bg */
+    .job-card {
+      background: #161616;
+      border: 1px solid #262626;
+      transition: background-color .14s ease, border-color .14s ease, transform .14s ease;
+      cursor: pointer;
+    }
+    .job-card:hover { background: #1c1c1c; border-color: #333; }
+    .job-card.is-selected {
+      background: #15233a;
+      border-color: #3b82f6;
+      box-shadow: 0 1px 2px rgba(0,0,0,.5), 0 0 0 1px rgba(59,130,246,.35);
+    }
+    .job-card.is-selected:hover { background: #182742; border-color: #3b82f6; }
+
+    /* Axis bar (score breakdown in detail panel) */
+    .axis-bar { height: 6px; border-radius: 4px; background: #262626; overflow: hidden; }
+    .axis-bar > span { display: block; height: 100%; background: #fafafa; border-radius: 4px; }
+
+    /* Badge — small monochrome pill used on the job card */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10.5px; font-weight: 500;
+      color: #d4d4d4;
+      background: #1f1f1f;
+      border: 1px solid #2e2e2e;
+      white-space: nowrap;
+    }
+    .badge svg { color: #a3a3a3; }
 
     /* Native form controls — match dark theme */
     input[type="text"], input[type="date"] { color-scheme: dark; }
-
-    /* Job detail drawer */
-    .drawer-backdrop {
-      position: fixed; inset: 0; z-index: 40;
-      background: rgba(0,0,0,.6);
-      backdrop-filter: blur(2px);
-      opacity: 0; pointer-events: none;
-      transition: opacity .18s ease;
-    }
-    .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
-    .drawer {
-      position: fixed; top: 0; right: 0; bottom: 0; z-index: 50;
-      width: min(560px, 92vw);
-      background: #0d0d0d;
-      border-left: 1px solid #262626;
-      box-shadow: -16px 0 40px -16px rgba(0,0,0,.8);
-      transform: translateX(100%);
-      transition: transform .22s cubic-bezier(.2,.7,.2,1);
-      display: flex; flex-direction: column;
-    }
-    .drawer.open { transform: translateX(0); }
-    .axis-bar { height: 6px; border-radius: 4px; background: #262626; overflow: hidden; }
-    .axis-bar > span { display: block; height: 100%; background: #fafafa; border-radius: 4px; }
 </style>
 </head>
 <body class="min-h-full font-sans antialiased text-ink-900">
@@ -385,7 +394,7 @@
       </section>
 
       <!-- Page: Jobs -->
-      <section data-page="jobs" class="hidden px-10 py-10 max-w-6xl mx-auto space-y-6">
+      <section data-page="jobs" class="hidden px-10 py-10 max-w-7xl mx-auto space-y-6">
         <header class="flex items-end justify-between gap-4 flex-wrap">
           <div>
             <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Discoveries</div>
@@ -403,18 +412,6 @@
             </button>
           </div>
         </header>
-
-        <!-- Stats strip -->
-        <div class="grid grid-cols-2 gap-px bg-ink-200/60 rounded-xl overflow-hidden border border-ink-200/60">
-          <div class="bg-white p-4">
-            <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Total</div>
-            <div class="mt-1.5 text-xl font-semibold tabular" id="jobs-stat-total">—</div>
-          </div>
-          <div class="bg-white p-4">
-            <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Avg score</div>
-            <div class="mt-1.5 text-xl font-semibold tabular" id="jobs-stat-avg">—</div>
-          </div>
-        </div>
 
         <!-- Toolbar -->
         <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -442,23 +439,29 @@
           </div>
         </div>
 
-        <!-- Jobs list -->
-        <div class="surface rounded-xl overflow-hidden">
-          <div class="px-6 py-3.5 border-b border-ink-100 flex items-center justify-between bg-gradient-to-b from-white to-ink-50/30">
-            <div class="text-[11px] uppercase tracking-wider text-ink-400 font-semibold flex items-center gap-3">
-              <span>Recent discoveries</span>
-              <span class="text-ink-300">·</span>
-              <span class="tabular text-ink-500" id="jobs-list-meta">0 shown</span>
+        <!-- Jobs list + detail (master/detail) -->
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.55fr)] gap-4 items-start">
+          <div class="space-y-2 min-w-0">
+            <div class="flex items-center justify-between px-1">
+              <div class="text-[11px] uppercase tracking-wider text-ink-400 font-semibold flex items-center gap-3">
+                <span>Recent discoveries</span>
+                <span class="text-ink-300">·</span>
+                <span class="tabular text-ink-500" id="jobs-list-meta">0 shown</span>
+              </div>
+              <div class="text-[11px] text-ink-400">latest first</div>
             </div>
-            <div class="text-[11px] text-ink-400">sorted by latest activity</div>
+            <ul id="jobs-list" class="space-y-2"></ul>
+            <div id="jobs-empty" class="surface rounded-xl px-6 py-16 text-center">
+              <div class="mx-auto h-10 w-10 rounded-full bg-ink-200/60 flex items-center justify-center mb-3">
+                <svg class="h-5 w-5 text-ink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+              </div>
+              <div class="text-sm font-medium text-ink-700">No jobs yet</div>
+              <div class="text-xs text-ink-400 mt-1">Run a cycle from the sidebar — postings appear here as soon as they're scored.</div>
+            </div>
           </div>
-          <ul id="jobs-list" class="divide-y divide-ink-100"></ul>
-          <div id="jobs-empty" class="px-6 py-16 text-center">
-            <div class="mx-auto h-10 w-10 rounded-full bg-ink-50 flex items-center justify-center mb-3">
-              <svg class="h-5 w-5 text-ink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-            </div>
-            <div class="text-sm font-medium text-ink-700">No jobs yet</div>
-            <div class="text-xs text-ink-400 mt-1">Run a cycle from the sidebar — postings appear here as soon as they're scored.</div>
+
+          <div class="min-w-0 lg:sticky lg:top-6 self-start">
+            <div id="jobs-detail" class="surface rounded-xl overflow-hidden flex flex-col max-h-[calc(100vh-3rem)]"></div>
           </div>
         </div>
       </section>
@@ -512,36 +515,6 @@
 
     </main>
   </div>
-
-  <!-- Job detail drawer -->
-  <div id="job-drawer-backdrop" class="drawer-backdrop"></div>
-  <aside id="job-drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="jd-title" aria-hidden="true">
-    <div class="px-6 pt-5 pb-4 border-b border-ink-100 flex items-start gap-4">
-      <div id="jd-ring" class="score-ring score-none h-12 w-12 rounded-full flex items-center justify-center shrink-0" style="--pct:0">
-        <div class="h-[38px] w-[38px] rounded-full bg-white flex items-center justify-center">
-          <span id="jd-score" class="text-[13px] font-semibold tabular">—</span>
-        </div>
-      </div>
-      <div class="min-w-0 flex-1">
-        <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold" id="jd-source">—</div>
-        <h2 id="jd-title" class="text-base font-semibold leading-snug mt-0.5 break-words">—</h2>
-        <div id="jd-company" class="text-[12.5px] text-ink-600 mt-0.5 truncate">—</div>
-      </div>
-      <button id="jd-close" aria-label="Close" class="text-ink-400 hover:text-ink-900 -mr-1 -mt-1 p-1 rounded hover:bg-ink-100 shrink-0">
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M6 18L18 6"/></svg>
-      </button>
-    </div>
-
-    <div id="jd-body" class="px-6 py-5 space-y-6 overflow-y-auto flex-1"></div>
-
-    <div class="px-6 py-4 border-t border-ink-100 bg-gradient-to-b from-white to-ink-50/40">
-      <a id="jd-open" href="#" target="_blank" rel="noopener" class="inline-flex w-full items-center justify-center gap-2 rounded-md bg-ink-900 hover:bg-ink-800 text-ink-50 text-[13px] font-semibold px-4 py-2.5 transition-colors">
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h5"/></svg>
-        Open posting
-      </a>
-      <div id="jd-no-link" class="hidden text-center text-xs text-ink-400">No apply link on this posting.</div>
-    </div>
-  </aside>
 
   <script src="/app.js"></script>
 </body>

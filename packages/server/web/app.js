@@ -59,6 +59,7 @@ const els = {
   navJobsCount: $('nav-jobs-count'),
   jobsList: $('jobs-list'),
   jobsEmpty: $('jobs-empty'),
+  jobsDetail: $('jobs-detail'),
   jobsListMeta: $('jobs-list-meta'),
   jobsSearch: $('jobs-search'),
   jobsRefresh: $('btn-jobs-refresh'),
@@ -68,25 +69,10 @@ const els = {
   jobsDateFrom: $('jobs-date-from'),
   jobsDateTo: $('jobs-date-to'),
   jobsDateCustomLabel: $('jobs-date-custom-label'),
-  jobsStatTotal: $('jobs-stat-total'),
-  jobsStatAvg: $('jobs-stat-avg'),
 
   // config
   cfgContent: $('cfg-content'),
   btnReloadConfig: $('btn-reload-config'),
-
-  // job drawer
-  drawer: $('job-drawer'),
-  drawerBackdrop: $('job-drawer-backdrop'),
-  drawerClose: $('jd-close'),
-  drawerBody: $('jd-body'),
-  drawerOpen: $('jd-open'),
-  drawerNoLink: $('jd-no-link'),
-  jdRing: $('jd-ring'),
-  jdScore: $('jd-score'),
-  jdTitle: $('jd-title'),
-  jdCompany: $('jd-company'),
-  jdSource: $('jd-source'),
 };
 
 const ROUTES = ['overview', 'jobs', 'activity', 'cycles', 'config'];
@@ -99,6 +85,7 @@ let jobsQuery = '';
 let jobsDateRange = 'today';   // 'today' | '24h' | '7d' | '30d' | 'all' | 'custom'
 let jobsDateFrom = '';         // YYYY-MM-DD when jobsDateRange === 'custom'
 let jobsDateTo = '';
+let selectedJobId = null;      // master/detail selection
 
 const cycleCounts = blankCounts();
 let activeCycleId = null;
@@ -527,14 +514,6 @@ function currentJobsView() {
 
 function paintJobs() {
   const all = Array.from(jobsById.values());
-
-  let scoreSum = 0, scoreN = 0;
-  for (const j of all) {
-    if (typeof j.score === 'number') { scoreSum += j.score; scoreN++; }
-  }
-  els.jobsStatTotal.textContent = all.length;
-  els.jobsStatAvg.textContent   = scoreN ? Math.round(scoreSum / scoreN) : '—';
-
   if (els.navJobsCount) els.navJobsCount.textContent = all.length ? String(all.length) : '';
 
   const { filtered } = currentJobsView();
@@ -545,53 +524,36 @@ function paintJobs() {
   if (!trimmed.length) {
     els.jobsList.innerHTML = '';
     els.jobsEmpty.hidden = false;
+    selectedJobId = null;
+    paintJobDetail(null);
     return;
   }
   els.jobsEmpty.hidden = true;
-  els.jobsList.innerHTML = trimmed.map(renderJobRow).join('');
+
+  if (!selectedJobId || !trimmed.find((j) => j.job_id === selectedJobId)) {
+    selectedJobId = trimmed[0].job_id;
+  }
+
+  els.jobsList.innerHTML = trimmed.map(renderJobCard).join('');
+  paintJobDetail(jobsById.get(selectedJobId) || null);
 }
 
 els.jobsList?.addEventListener('click', (e) => {
   if (e.target.closest('a')) return;
-  const row = e.target.closest('[data-job-id]');
-  if (!row) return;
-  openJobDrawer(row.dataset.jobId);
+  const card = e.target.closest('[data-job-id]');
+  if (!card) return;
+  const id = card.dataset.jobId;
+  if (id === selectedJobId) return;
+  selectedJobId = id;
+  els.jobsList.querySelectorAll('[data-job-id]').forEach((el) => {
+    el.classList.toggle('is-selected', el.dataset.jobId === id);
+  });
+  paintJobDetail(jobsById.get(id) || null);
 });
 
-function renderJobRow(j) {
-  const score = typeof j.score === 'number' ? Math.round(j.score) : null;
-  const cls = scoreClass(score);
-  const ring = `<div class="score-ring ${cls} h-11 w-11 rounded-full flex items-center justify-center shrink-0" style="--pct:${score ?? 0}">
-    <div class="h-[34px] w-[34px] rounded-full bg-white flex items-center justify-center">
-      <span class="text-[12px] font-semibold tabular ${cls}">${score ?? '—'}</span>
-    </div>
-  </div>`;
-
-  const titleHtml = escapeText(j.title || '(untitled)');
-
-  const meta = [j.source, j.location, formatSalary(j)].filter(Boolean).map(escapeText).join(' · ');
-
-  const errored = isErrored(j);
-  const rationale = errored ? j.rationale.replace(/^errored:\s*/, '') : j.rationale;
-
-  return `<li class="job-row px-6 py-3.5 grid grid-cols-[44px_1fr_auto] gap-4 items-center cursor-pointer" data-job-id="${escapeAttr(j.job_id)}">
-    ${ring}
-    <div class="min-w-0">
-      <div class="truncate text-[13.5px] font-semibold">${titleHtml}</div>
-      <div class="mt-0.5 text-[11.5px] text-ink-500 truncate">
-        <span class="font-medium text-ink-700">${escapeText(j.company || '—')}</span>
-        ${meta ? ` · ${meta}` : ''}
-      </div>
-      ${rationale ? `<div class="mt-1 text-[11.5px] truncate ${errored ? 'text-rose-600' : 'text-ink-500'}">${escapeText(rationale)}</div>` : ''}
-    </div>
-    <div class="text-[11px] text-ink-400 tabular text-right whitespace-nowrap hidden md:block">
-      <div>${escapeText(j.first_seen || '—')}</div>
-      ${j.posted_date ? `<div class="text-ink-300 mt-0.5">posted ${escapeText(j.posted_date)}</div>` : ''}
-    </div>
-  </li>`;
-}
-
-// ---------- job drawer ----------
+const ICON_PLATFORM = `<svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>`;
+const ICON_LOCATION = `<svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s-7-6-7-12a7 7 0 0114 0c0 6-7 12-7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>`;
+const ICON_SALARY = `<svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>`;
 
 const AXIS_LABELS = {
   skills_match: 'Skills',
@@ -602,49 +564,65 @@ const AXIS_LABELS = {
   recency: 'Recency',
 };
 
-function openJobDrawer(jobId) {
-  const j = jobsById.get(jobId);
-  if (!j) return;
-  renderJobDrawer(j);
-  els.drawer.classList.add('open');
-  els.drawer.setAttribute('aria-hidden', 'false');
-  els.drawerBackdrop.classList.add('open');
-  document.body.style.overflow = 'hidden';
+function badge(icon, text) {
+  return `<span class="badge">${icon}<span>${escapeText(text)}</span></span>`;
 }
 
-function closeJobDrawer() {
-  els.drawer.classList.remove('open');
-  els.drawer.setAttribute('aria-hidden', 'true');
-  els.drawerBackdrop.classList.remove('open');
-  document.body.style.overflow = '';
-}
-
-els.drawerClose?.addEventListener('click', closeJobDrawer);
-els.drawerBackdrop?.addEventListener('click', closeJobDrawer);
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && els.drawer?.classList.contains('open')) closeJobDrawer();
-});
-
-function renderJobDrawer(j) {
+function renderJobCard(j) {
   const score = typeof j.score === 'number' ? Math.round(j.score) : null;
   const cls = scoreClass(score);
+  const ring = `<div class="score-ring ${cls} h-10 w-10 rounded-full flex items-center justify-center shrink-0" style="--pct:${score ?? 0}">
+    <div class="h-[30px] w-[30px] rounded-full bg-white flex items-center justify-center">
+      <span class="text-[11.5px] font-semibold tabular ${cls}">${score ?? '—'}</span>
+    </div>
+  </div>`;
 
-  els.jdRing.className = `score-ring ${cls} h-12 w-12 rounded-full flex items-center justify-center shrink-0`;
-  els.jdRing.style.setProperty('--pct', String(score ?? 0));
-  els.jdScore.textContent = score ?? '—';
-  els.jdScore.className = `text-[13px] font-semibold tabular ${cls}`;
-  els.jdTitle.textContent = j.title || '(untitled)';
-  els.jdCompany.textContent = j.company || '—';
-  els.jdSource.textContent = j.source || '—';
+  const selectedCls = j.job_id === selectedJobId ? ' is-selected' : '';
 
-  if (j.apply_url) {
-    els.drawerOpen.href = j.apply_url;
-    els.drawerOpen.classList.remove('hidden');
-    els.drawerNoLink.classList.add('hidden');
-  } else {
-    els.drawerOpen.classList.add('hidden');
-    els.drawerNoLink.classList.remove('hidden');
+  const badges = [
+    j.source   ? badge(ICON_PLATFORM, j.source)   : '',
+    j.location ? badge(ICON_LOCATION, j.location) : '',
+  ].filter(Boolean).join('');
+
+  return `<li class="job-card${selectedCls} rounded-lg p-3 flex items-start gap-3" data-job-id="${escapeAttr(j.job_id)}">
+    ${ring}
+    <div class="min-w-0 flex-1">
+      <div class="flex items-start justify-between gap-2">
+        <div class="text-[13px] font-semibold leading-snug truncate flex-1">${escapeText(j.title || '(untitled)')}</div>
+        <span class="text-[10.5px] text-ink-400 tabular shrink-0 whitespace-nowrap">${escapeText(j.first_seen || '—')}</span>
+      </div>
+      <div class="mt-0.5 text-[11.5px] text-ink-500 truncate font-medium">${escapeText(j.company || '—')}</div>
+      ${badges ? `<div class="mt-1.5 flex flex-wrap gap-1">${badges}</div>` : ''}
+    </div>
+  </li>`;
+}
+
+function paintJobDetail(j) {
+  if (!j) {
+    els.jobsDetail.innerHTML = `
+      <div class="px-6 py-16 text-center flex-1 flex flex-col items-center justify-center">
+        <div class="mx-auto h-10 w-10 rounded-full bg-ink-200/60 flex items-center justify-center mb-3">
+          <svg class="h-5 w-5 text-ink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12h6M12 9v6"/><circle cx="12" cy="12" r="9"/></svg>
+        </div>
+        <div class="text-sm font-medium text-ink-700">No job selected</div>
+        <div class="text-xs text-ink-400 mt-1">Pick a posting from the list.</div>
+      </div>`;
+    return;
   }
+
+  const score = typeof j.score === 'number' ? Math.round(j.score) : null;
+  const cls = scoreClass(score);
+  const ring = `<div class="score-ring ${cls} h-12 w-12 rounded-full flex items-center justify-center shrink-0" style="--pct:${score ?? 0}">
+    <div class="h-[38px] w-[38px] rounded-full bg-white flex items-center justify-center">
+      <span class="text-[13px] font-semibold tabular ${cls}">${score ?? '—'}</span>
+    </div>
+  </div>`;
+
+  const badges = [
+    j.source   ? badge(ICON_PLATFORM, j.source)   : '',
+    j.location ? badge(ICON_LOCATION, j.location) : '',
+    formatSalary(j) ? badge(ICON_SALARY, formatSalary(j)) : '',
+  ].filter(Boolean).join('');
 
   const errored = isErrored(j);
   const rationale = errored ? j.rationale.replace(/^errored:\s*/, '') : j.rationale;
@@ -654,27 +632,24 @@ function renderJobDrawer(j) {
     try { breakdown = JSON.parse(j.breakdown); } catch { breakdown = null; }
   }
 
-  const meta = drawerSection('Posting', drawerKv([
-    ['Location', j.location || '—'],
-    ['Work mode', j.work_mode || '—'],
-    ['Seniority', j.seniority || '—'],
-    ['Salary', formatSalary(j) || '—'],
-    ['Source', j.source || '—'],
-    ['Posted', j.posted_date || '—'],
-    ['Status', j.status || '—'],
+  const meta = detailSection('Posting', detailKv([
+    ['Work mode',  j.work_mode || '—'],
+    ['Seniority',  j.seniority || '—'],
+    ['Posted',     j.posted_date || '—'],
+    ['Status',     j.status || '—'],
     ['First seen', j.first_seen || '—'],
-    ['Last seen', j.last_seen || '—'],
+    ['Last seen',  j.last_seen || '—'],
   ]));
 
   const rationaleSection = rationale
-    ? drawerSection(errored ? 'Error' : 'Rationale',
-        `<p class="text-[13px] leading-relaxed ${errored ? 'text-rose-700' : 'text-ink-700'}">${escapeText(rationale)}</p>`)
+    ? detailSection(errored ? 'Error' : 'Rationale',
+        `<p class="text-[13px] leading-relaxed ${errored ? 'text-rose-600' : 'text-ink-700'}">${escapeText(rationale)}</p>`)
     : '';
 
   const breakdownSection = breakdown ? renderBreakdownSection(breakdown) : '';
 
-  const idSection = drawerSection('Identifiers', `
-    <dl class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 text-[12px]">
+  const idSection = detailSection('Identifiers', `
+    <dl class="grid grid-cols-[100px_1fr] gap-x-4 gap-y-1.5 text-[12px]">
       <dt class="text-ink-500">job_id</dt>
       <dd class="font-mono text-ink-800 break-all">${escapeText(j.job_id)}</dd>
       ${j.apply_url ? `
@@ -684,8 +659,32 @@ function renderJobDrawer(j) {
     </dl>
   `);
 
-  els.drawerBody.innerHTML = meta + rationaleSection + breakdownSection + idSection;
-  els.drawerBody.scrollTop = 0;
+  const footer = j.apply_url
+    ? `<div class="px-6 py-4 border-t border-ink-200/60 shrink-0">
+        <a href="${escapeAttr(j.apply_url)}" target="_blank" rel="noopener" class="inline-flex w-full items-center justify-center gap-2 rounded-md bg-ink-900 hover:bg-ink-800 text-ink-50 text-[13px] font-semibold px-4 py-2.5 transition-colors">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h5"/></svg>
+          Open posting
+        </a>
+      </div>`
+    : `<div class="px-6 py-4 border-t border-ink-200/60 text-center text-xs text-ink-400 shrink-0">No apply link on this posting.</div>`;
+
+  els.jobsDetail.innerHTML = `
+    <div class="px-6 pt-5 pb-4 border-b border-ink-200/60 flex items-start gap-4 shrink-0">
+      ${ring}
+      <div class="min-w-0 flex-1">
+        <h2 class="text-base font-semibold leading-snug break-words">${escapeText(j.title || '(untitled)')}</h2>
+        <div class="text-[12.5px] text-ink-600 mt-0.5 truncate">${escapeText(j.company || '—')}</div>
+        ${badges ? `<div class="mt-2 flex flex-wrap gap-1.5">${badges}</div>` : ''}
+      </div>
+    </div>
+    <div class="px-6 py-5 space-y-6 overflow-y-auto flex-1">
+      ${meta}
+      ${rationaleSection}
+      ${breakdownSection}
+      ${idSection}
+    </div>
+    ${footer}
+  `;
 }
 
 function renderBreakdownSection(b) {
@@ -718,18 +717,18 @@ function renderBreakdownSection(b) {
     <span class="tabular font-semibold text-ink-800">${Math.round(b.final_score ?? 0)} · ${escapeText(b.confidence || '—')} confidence</span>
   </div>`;
 
-  return drawerSection('Score breakdown', head + `<div class="space-y-3.5">${rows}</div>` + deal);
+  return detailSection('Score breakdown', head + `<div class="space-y-3.5">${rows}</div>` + deal);
 }
 
-function drawerSection(title, bodyHtml) {
+function detailSection(title, bodyHtml) {
   return `<section>
     <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-2.5">${escapeText(title)}</div>
     ${bodyHtml}
   </section>`;
 }
 
-function drawerKv(rows) {
-  return `<dl class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 text-[13px]">${rows
+function detailKv(rows) {
+  return `<dl class="grid grid-cols-[110px_1fr] gap-x-4 gap-y-1.5 text-[13px]">${rows
     .map(([k, v]) => `<dt class="text-ink-500">${escapeText(k)}</dt><dd class="text-ink-800">${escapeText(v)}</dd>`)
     .join('')}</dl>`;
 }
