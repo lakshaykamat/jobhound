@@ -70,12 +70,21 @@ const els = {
   jobsDateTo: $('jobs-date-to'),
   jobsDateCustomLabel: $('jobs-date-custom-label'),
 
-  // config
-  cfgContent: $('cfg-content'),
-  btnReloadConfig: $('btn-reload-config'),
+  // settings
+  settingsEditor: $('settings-editor'),
+  settingsStatus: $('settings-status'),
+  btnSettingsReload: $('btn-settings-reload'),
+  btnSettingsSave: $('btn-settings-save'),
+
+  // setup
+  setupForm: $('setup-form'),
+  setupStatus: $('setup-status'),
+  setupResumeFile: $('setup-resume-file'),
+  setupResumeFilename: $('setup-resume-filename'),
 };
 
-const ROUTES = ['overview', 'jobs', 'activity', 'cycles', 'config'];
+const ROUTES = ['overview', 'jobs', 'activity', 'cycles', 'tailor', 'resume', 'settings', 'setup'];
+let isConfigured = false;
 const MAX_FEED_ITEMS = 300;
 const MAX_JOBS_ROWS = 500;
 
@@ -95,17 +104,20 @@ function blankCounts() {
 }
 
 const STATUS_COLORS = {
-  paused:   'bg-ink-300',
-  idle:     'bg-sky-500',
-  running:  'bg-emerald-500 animate-pulse-soft',
-  stopping: 'bg-amber-500 animate-pulse-soft',
+  paused:   'bg-ink-900 opacity-40',
+  idle:     'bg-ink-900',
+  running:  'bg-ink-900 animate-pulse-soft',
+  stopping: 'bg-ink-900 animate-pulse-soft',
 };
 
 // ---------- router ----------
 
 function currentRoute() {
   const hash = location.hash.replace(/^#\//, '');
-  return ROUTES.includes(hash) ? hash : 'overview';
+  const fallback = isConfigured ? 'overview' : 'setup';
+  if (!ROUTES.includes(hash)) return fallback;
+  if (!isConfigured && hash !== 'setup') return 'setup';
+  return hash;
 }
 
 function showRoute(route) {
@@ -113,11 +125,15 @@ function showRoute(route) {
     sec.classList.toggle('hidden', sec.dataset.page !== route);
   });
   $$('.nav-item').forEach((el) => {
-    el.classList.toggle('active', el.dataset.route === route);
+    const active = el.dataset.route === route;
+    el.classList.toggle('active', active);
+    if (active) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
   });
   if (route === 'cycles') refreshCycles();
-  if (route === 'config') refreshConfig();
+  if (route === 'settings') refreshSettings();
   if (route === 'jobs') refreshJobs();
+  if ((route === 'tailor' || route === 'resume') && typeof window.refreshTailor === 'function') window.refreshTailor();
 }
 
 window.addEventListener('hashchange', () => showRoute(currentRoute()));
@@ -131,7 +147,15 @@ els.btnClear.addEventListener('click', () => {
   els.feed.innerHTML = '';
   els.feedEmpty.hidden = false;
 });
-els.btnReloadConfig.addEventListener('click', () => refreshConfig());
+if (els.btnSettingsReload) els.btnSettingsReload.addEventListener('click', () => refreshSettings());
+if (els.btnSettingsSave) els.btnSettingsSave.addEventListener('click', () => saveSettings());
+if (els.setupForm) els.setupForm.addEventListener('submit', submitSetup);
+if (els.setupResumeFile && els.setupResumeFilename) {
+  els.setupResumeFile.addEventListener('change', () => {
+    const f = els.setupResumeFile.files?.[0];
+    els.setupResumeFilename.textContent = f ? f.name : 'Click to upload your resume PDF';
+  });
+}
 
 if (els.jobsRefresh) els.jobsRefresh.addEventListener('click', () => refreshJobs());
 if (els.jobsExport) els.jobsExport.addEventListener('click', () => exportJobsCsv());
@@ -262,7 +286,7 @@ function renderUsage(usage) {
   els.searchesBar.style.width = `${pct}%`;
   els.searchesBar.className =
     'h-full transition-all duration-500 ' +
-    (pct >= 90 ? 'bg-rose-500' : pct >= 70 ? 'bg-amber-500' : 'bg-ink-900');
+    (pct >= 90 ? 'bg-ink-900 opacity-60' : pct >= 70 ? 'bg-ink-900 opacity-75' : 'bg-ink-900');
 }
 
 function renderLastCycle(c) {
@@ -305,8 +329,8 @@ function renderCyclesTable(cycles) {
         <td class="px-4 py-2.5 tabular text-right text-ink-800">${c.found}</td>
         <td class="px-4 py-2.5 tabular text-right text-ink-800">${c.new}</td>
         <td class="px-4 py-2.5 tabular text-right text-ink-800">${c.inserted}</td>
-        <td class="px-4 py-2.5 tabular text-right ${c.filtered ? 'text-amber-600' : 'text-ink-500'}">${c.filtered}</td>
-        <td class="px-4 py-2.5 tabular text-right ${c.errored ? 'text-rose-600 font-semibold' : 'text-ink-500'}">${c.errored}</td>
+        <td class="px-4 py-2.5 tabular text-right ${c.filtered ? 'text-ink-800 font-semibold' : 'text-ink-500'}">${c.filtered}</td>
+        <td class="px-4 py-2.5 tabular text-right ${c.errored ? 'text-ink-800 font-semibold underline decoration-ink-800/60 underline-offset-2' : 'text-ink-500'}">${c.errored}</td>
         <td class="px-4 py-2.5 tabular text-right text-ink-700">${c.searches_used}</td>
         <td class="px-4 py-2.5 tabular text-right text-ink-700">${formatNumber(c.tokens_used)}</td>
         <td class="px-4 py-2.5 tabular text-right text-ink-800">$${(c.cost_usd ?? 0).toFixed(4)}</td>
@@ -315,148 +339,138 @@ function renderCyclesTable(cycles) {
     .join('');
 }
 
-// ---------- config page ----------
+// ---------- setup + settings ----------
 
-async function refreshConfig() {
-  els.cfgContent.innerHTML = '<div class="rounded-xl bg-white border border-ink-200/70 px-6 py-8 text-sm text-ink-400">Loading config…</div>';
+async function checkSetupStatus() {
   try {
-    const res = await fetch('/api/config');
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      els.cfgContent.innerHTML = `<div class="rounded-xl bg-rose-50 border border-rose-200 px-6 py-5 text-sm text-rose-700">Failed to load config: ${escapeText(err.error || res.statusText)}</div>`;
-      return;
-    }
-    renderConfig(await res.json());
+    const res = await fetch('/api/setup/status');
+    if (!res.ok) return;
+    const body = await res.json();
+    isConfigured = !!body.configured;
   } catch (err) {
-    els.cfgContent.innerHTML = `<div class="rounded-xl bg-rose-50 border border-rose-200 px-6 py-5 text-sm text-rose-700">${escapeText(String(err))}</div>`;
+    console.error('setup status fetch failed', err);
   }
 }
 
-function renderConfig(cfg) {
-  const cards = [];
+async function submitSetup(ev) {
+  ev.preventDefault();
+  if (!els.setupForm) return;
+  const form = new FormData(els.setupForm);
+  const file = els.setupResumeFile?.files?.[0];
+  if (!file) {
+    els.setupStatus.textContent = 'please select your resume PDF first';
+    return;
+  }
+  const openaiKey = String(form.get('openai_key') ?? '').trim();
+  if (!openaiKey) {
+    els.setupStatus.textContent = 'OpenAI key is required to parse the resume';
+    return;
+  }
+  const model = String(form.get('model') ?? '').trim() || 'gpt-4o-mini';
 
-  // Cycle + server
-  cards.push(card('Cycle & server', kvGrid([
-    ['Queries', String(cfg.cycle.queries.length)],
-    ['Score threshold', String(cfg.cycle.score_threshold)],
-    ['Max pages / query', String(cfg.cycle.max_pages_per_query)],
-    ['Max job age (days)', String(cfg.cycle.max_job_age_days)],
-    ['Dedup strategy', monoSpan(cfg.cycle.dedup_strategy)],
-    ['Poll interval', formatDuration(cfg.server.poll_interval_seconds)],
-    ['HTTP port', String(cfg.server.http_port)],
-  ])));
+  try {
+    els.setupStatus.textContent = 'parsing resume…';
+    const uploadUrl = `/api/resume/upload?filename=${encodeURIComponent(file.name)}&openai_key=${encodeURIComponent(openaiKey)}&model=${encodeURIComponent(model)}`;
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/pdf' },
+      body: file,
+    });
+    const uploadBody = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok) {
+      els.setupStatus.textContent = uploadBody.error || `resume parse failed (${uploadRes.status})`;
+      return;
+    }
 
-  // Queries
-  cards.push(card('Search queries',
-    `<ul class="space-y-1.5 text-sm">${cfg.cycle.queries.map((q) => `<li class="font-mono text-ink-800 px-3 py-1.5 rounded bg-ink-50/70">${escapeText(q)}</li>`).join('')}</ul>`,
-  ));
+    els.setupStatus.textContent = 'saving config…';
+    const payload = buildSetupPayload(form);
+    const setupRes = await fetch('/api/setup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const setupBody = await setupRes.json().catch(() => ({}));
+    if (!setupRes.ok) {
+      els.setupStatus.textContent = setupBody.error || `save failed (${setupRes.status})`;
+      return;
+    }
 
-  // OpenAI + SerpApi
-  cards.push(card('Providers', kvGrid([
-    ['OpenAI model', monoSpan(cfg.openai.model)],
-    ['LLM concurrency', String(cfg.openai.llm_concurrency)],
-    ['SerpApi country', monoSpan(cfg.serpapi.country)],
-    ['SerpApi language', monoSpan(cfg.serpapi.language)],
-    ['Platform filter', cfg.serpapi.platforms.length
-      ? `<div class="flex flex-wrap gap-1.5">${cfg.serpapi.platforms.map(pillTag).join('')}</div>`
-      : '<span class="text-ink-400 italic">no filter</span>'],
-  ])));
-
-  // Scoring
-  const axisRows = Object.entries(cfg.scoring.axis_weights)
-    .map(([k, v]) => `<div class="flex items-center justify-between text-sm py-1">
-        <span class="text-ink-500">${escapeText(k)}</span>
-        <span class="tabular font-medium text-ink-800">${v}</span>
-      </div>`).join('');
-  cards.push(card('Scoring', `
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-2">Axis weights</div>
-        ${axisRows}
-      </div>
-      <div>${kvGrid([
-        ['Dealbreaker cap', String(cfg.scoring.dealbreaker_score_cap)],
-        ['Recency full days', String(cfg.scoring.recency_full_days)],
-        ['Recency decay days', String(cfg.scoring.recency_decay_days)],
-      ])}</div>
-    </div>
-  `));
-
-  // Profile
-  const p = cfg.profile;
-  cards.push(card('Fit profile', `
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 text-sm">
-      <div>
-        <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-2">Identity</div>
-        ${kvGrid([
-          ['Seniority', monoSpan(p.seniority ?? '—')],
-          ['Years', String(p.years_experience ?? '—')],
-          ['Min salary', p.min_annual_salary != null ? `${p.compensation_currency?.toUpperCase() ?? ''} ${formatNumber(p.min_annual_salary)}` : '<span class="text-ink-400 italic">—</span>'],
-          ['Authorization', tagList(p.work_authorization)],
-          ['Work mode', tagList(p.work_mode_preference)],
-          ['Company size', tagList(p.preferred_company_size)],
-          ['Relocation', p.relocation_open ? 'yes' : 'no'],
-          ['Availability', p.availability ?? '<span class="text-ink-400 italic">—</span>'],
-        ])}
-      </div>
-      <div class="space-y-4">
-        <div>
-          <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-2">Role titles</div>
-          ${tagList(p.role_titles)}
-        </div>
-        <div>
-          <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-2">Locations</div>
-          ${tagList(p.locations)}
-        </div>
-        <div>
-          <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-2">Domains</div>
-          ${tagList(p.domains)}
-        </div>
-      </div>
-    </div>
-    <div class="mt-6 pt-5 border-t border-ink-100">
-      <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-2">Skills (${(p.skills || []).length})</div>
-      ${tagList(p.skills)}
-    </div>
-    ${p.highlights && p.highlights.length ? `
-      <div class="mt-6 pt-5 border-t border-ink-100">
-        <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-2">Highlights</div>
-        <ul class="space-y-1.5 text-sm text-ink-700 list-disc pl-5">${p.highlights.map((h) => `<li>${escapeText(h)}</li>`).join('')}</ul>
-      </div>` : ''}
-    ${p.notes ? `
-      <div class="mt-6 pt-5 border-t border-ink-100">
-        <div class="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-2">Notes</div>
-        <p class="text-sm text-ink-700 leading-relaxed">${escapeText(p.notes)}</p>
-      </div>` : ''}
-  `));
-
-  els.cfgContent.innerHTML = cards.join('');
+    const d = setupBody.derived || {};
+    els.setupStatus.textContent = `saved — derived ${d.skills?.length ?? 0} skills, ${d.role_titles?.length ?? 0} role titles, ${d.years_experience ?? 0}y experience. Redirecting…`;
+    isConfigured = true;
+    location.hash = '#/resume';
+  } catch (err) {
+    els.setupStatus.textContent = `save failed: ${err.message}`;
+  }
 }
 
-function card(title, bodyHtml) {
-  return `<div class="rounded-xl bg-white border border-ink-200/70">
-    <div class="px-6 py-4 border-b border-ink-100"><h2 class="text-sm font-semibold">${escapeText(title)}</h2></div>
-    <div class="px-6 py-5">${bodyHtml}</div>
-  </div>`;
+function buildSetupPayload(form) {
+  const queries = String(form.get('queries') ?? '')
+    .split('\n')
+    .map((q) => q.trim())
+    .filter(Boolean);
+  const seniority = String(form.get('seniority') ?? '').trim();
+
+  return {
+    cycle: { queries },
+    serpapi: {
+      country: String(form.get('country') ?? '').trim().toLowerCase(),
+      language: String(form.get('language') ?? '').trim().toLowerCase(),
+    },
+    openai: { model: String(form.get('model') ?? '').trim() || 'gpt-4o-mini' },
+    secrets: {
+      serpapi_key: String(form.get('serpapi_key') ?? '').trim(),
+      openai_key: String(form.get('openai_key') ?? '').trim(),
+    },
+    profile: { seniority: seniority || null },
+  };
 }
 
-function kvGrid(rows) {
-  return `<dl class="grid grid-cols-2 gap-x-6 gap-y-2.5 text-sm">${rows
-    .map(([k, v]) => `<dt class="text-ink-500">${escapeText(k)}</dt><dd class="text-ink-800 tabular">${v}</dd>`)
-    .join('')}</dl>`;
+async function refreshSettings() {
+  if (!els.settingsEditor) return;
+  els.settingsStatus.textContent = 'loading…';
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      els.settingsStatus.textContent = body.error || `failed to load (${res.status})`;
+      return;
+    }
+    const cfg = await res.json();
+    els.settingsEditor.value = JSON.stringify(cfg, null, 2);
+    els.settingsStatus.textContent = '';
+  } catch (err) {
+    els.settingsStatus.textContent = `load failed: ${err.message}`;
+  }
 }
 
-function tagList(items) {
-  if (!items || !items.length) return '<span class="text-ink-400 italic">—</span>';
-  return `<div class="flex flex-wrap gap-1.5">${items.map(pillTag).join('')}</div>`;
-}
-
-function pillTag(s) {
-  return `<span class="inline-flex items-center rounded-md bg-ink-50 border border-ink-200/70 px-2 py-0.5 text-[11px] font-medium text-ink-700">${escapeText(s)}</span>`;
-}
-
-function monoSpan(s) {
-  return `<span class="font-mono">${escapeText(s)}</span>`;
+async function saveSettings() {
+  if (!els.settingsEditor) return;
+  let parsed;
+  try {
+    parsed = JSON.parse(els.settingsEditor.value);
+  } catch (err) {
+    els.settingsStatus.textContent = `invalid JSON: ${err.message}`;
+    return;
+  }
+  els.settingsStatus.textContent = 'saving…';
+  try {
+    const res = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(parsed),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      els.settingsStatus.textContent = body.error || `save failed (${res.status})`;
+      return;
+    }
+    els.settingsStatus.textContent = 'saved';
+    isConfigured = true;
+    setTimeout(() => { if (els.settingsStatus.textContent === 'saved') els.settingsStatus.textContent = ''; }, 1500);
+  } catch (err) {
+    els.settingsStatus.textContent = `save failed: ${err.message}`;
+  }
 }
 
 // ---------- jobs ----------
@@ -643,7 +657,7 @@ function paintJobDetail(j) {
 
   const rationaleSection = rationale
     ? detailSection(errored ? 'Error' : 'Rationale',
-        `<p class="text-[13px] leading-relaxed ${errored ? 'text-rose-600' : 'text-ink-700'}">${escapeText(rationale)}</p>`)
+        `<p class="text-[13px] leading-relaxed ${errored ? 'text-ink-800 font-semibold' : 'text-ink-700'}">${escapeText(rationale)}</p>`)
     : '';
 
   const breakdownSection = breakdown ? renderBreakdownSection(breakdown) : '';
@@ -654,7 +668,7 @@ function paintJobDetail(j) {
       <dd class="font-mono text-ink-800 break-all">${escapeText(j.job_id)}</dd>
       ${j.apply_url ? `
         <dt class="text-ink-500">apply_url</dt>
-        <dd class="text-ink-800 break-all"><a href="${escapeAttr(j.apply_url)}" target="_blank" rel="noopener" class="text-sky-700 hover:underline">${escapeText(j.apply_url)}</a></dd>
+        <dd class="text-ink-800 break-all"><a href="${escapeAttr(j.apply_url)}" target="_blank" rel="noopener" class="text-ink-800 underline decoration-ink-800/50 underline-offset-2">${escapeText(j.apply_url)}</a></dd>
       ` : ''}
     </dl>
   `);
@@ -706,9 +720,9 @@ function renderBreakdownSection(b) {
     .join('');
 
   const deal = (b.deal_breakers && b.deal_breakers.length)
-    ? `<div class="mt-4 rounded-md bg-rose-50 border border-rose-200 px-3 py-2.5">
-        <div class="text-[10px] uppercase tracking-wider text-rose-700 font-semibold mb-1">Deal-breakers</div>
-        <ul class="text-[12px] text-rose-700 space-y-0.5 list-disc pl-4">${b.deal_breakers.map((d) => `<li>${escapeText(d)}</li>`).join('')}</ul>
+    ? `<div class="mt-4 rounded-md bg-ink-50 border border-ink-900 px-3 py-2.5">
+        <div class="text-[10px] uppercase tracking-wider text-ink-800 font-semibold mb-1">Deal-breakers</div>
+        <ul class="text-[12px] text-ink-700 space-y-0.5 list-disc pl-4">${b.deal_breakers.map((d) => `<li>${escapeText(d)}</li>`).join('')}</ul>
       </div>`
     : '';
 
@@ -864,13 +878,13 @@ function connectStream() {
   const src = new EventSource('/api/events');
   src.addEventListener('open', () => {
     els.sseStatus.textContent = 'live';
-    els.sseStatus.className = 'text-emerald-600';
-    els.sseDot.className = 'h-1.5 w-1.5 rounded-full bg-emerald-500';
+    els.sseStatus.className = 'text-ink-800';
+    els.sseDot.className = 'h-1.5 w-1.5 rounded-full bg-ink-900';
   });
   src.addEventListener('error', () => {
     els.sseStatus.textContent = 'reconnecting…';
-    els.sseStatus.className = 'text-amber-600';
-    els.sseDot.className = 'h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse-soft';
+    els.sseStatus.className = 'text-ink-800';
+    els.sseDot.className = 'h-1.5 w-1.5 rounded-full bg-ink-900 animate-pulse-soft';
   });
 
   src.addEventListener('state', (ev) => {
@@ -980,9 +994,13 @@ function escapeText(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/
 
 // ---------- boot ----------
 
-if (!location.hash) location.hash = '#/overview';
-showRoute(currentRoute());
-refreshState();
-refreshJobs();
-connectStream();
-setInterval(refreshState, 30_000);
+(async () => {
+  await checkSetupStatus();
+  if (!isConfigured) location.hash = '#/setup';
+  else if (!location.hash) location.hash = '#/overview';
+  showRoute(currentRoute());
+  refreshState();
+  refreshJobs();
+  connectStream();
+  setInterval(refreshState, 30_000);
+})();
