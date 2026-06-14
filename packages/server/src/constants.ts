@@ -88,6 +88,23 @@ export const DEFAULT_LLM_CONCURRENCY = 4;
 export const ANALYZE_MAX_TOKENS = 80;
 export const SCORE_MAX_TOKENS = 500;
 export const DESCRIPTION_MAX_CHARS = 4000;
+export const PARSE_RESUME_MAX_TOKENS = 4000;
+export const RESUME_TEXT_MAX_CHARS = 16000;
+export const RESUME_PDF_MAX_BYTES = 5 * 1024 * 1024;
+
+// Tailor — caps both shape the prompt and validate the response.
+export const TAILOR_MAX_TOKENS = 4000;
+export const TAILOR_MAX_BULLETS_PER_JOB = 4;
+export const TAILOR_MAX_BULLETS_PER_PROJECT = 3;
+export const TAILOR_MAX_BULLET_CHARS = 220;
+export const TAILOR_MAX_SKILLS = 16;
+export const TAILOR_JD_MAX_CHARS = 8000;
+
+// ATS target — if the first pass scores below this, the tailor re-runs
+// in refine mode with the "still missing" keywords until it hits target
+// or runs out of attempts. Stops early if the score plateaus.
+export const TAILOR_ATS_TARGET = 0.9;
+export const TAILOR_ATS_MAX_RETRIES = 2;
 
 // scoring (LLM scores 5 axes; recency is computed deterministically)
 // Weights must sum to 100.

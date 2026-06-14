@@ -16,6 +16,7 @@ export default defineConfig({
       reporter: ['text', 'html', 'lcov'],
       include: ['src/**/*.ts'],
       exclude: [
+        'src/adapters/resume-parser.ts',
         'src/cli/**',
         'src/core/event-bus.ts',
         'src/core/observable-tracker.ts',

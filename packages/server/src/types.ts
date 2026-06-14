@@ -77,3 +77,112 @@ export interface RawPosting {
   posted_at: string | null;
 }
 
+// =====================================================================
+// Resume (base + tailored)
+// =====================================================================
+
+export interface ContactLink {
+  label: string;
+  url: string;
+}
+
+export interface ContactBlock {
+  name: string;
+  email: string;
+  phone: string | null;
+  location: string | null;
+  links: ContactLink[];
+}
+
+export interface ResumeJob {
+  company: string;
+  title: string;
+  dates: string;
+  location: string | null;
+  bullets: string[];
+}
+
+export interface ResumeProject {
+  name: string;
+  link: string | null;
+  bullets: string[];
+}
+
+export interface ResumeEducation {
+  school: string;
+  degree: string;
+  dates: string;
+  details: string | null;
+}
+
+export interface BaseResume {
+  contact: ContactBlock;
+  summary: string;
+  experience: ResumeJob[];
+  projects: ResumeProject[];
+  skills: string[];
+  education: ResumeEducation[];
+  source_pdf_name: string;
+  parsed_at: string;
+}
+
+// =====================================================================
+// Tailor — per-JD output. Mirrors BaseResume but every bullet carries
+// a jd_relevance score the renderer uses for one-page drops.
+// =====================================================================
+
+export interface TailoredBullet {
+  text: string;
+  jd_relevance: number;
+}
+
+export interface TailoredJob {
+  company: string;
+  title: string;
+  dates: string;
+  location: string | null;
+  bullets: TailoredBullet[];
+}
+
+export interface TailoredProject {
+  name: string;
+  link: string | null;
+  bullets: TailoredBullet[];
+}
+
+export interface TailoredResume {
+  contact: ContactBlock;
+  summary: string;
+  experience: TailoredJob[];
+  projects: TailoredProject[];
+  skills: string[];
+  education: ResumeEducation[];
+  must_have_keywords: string[];
+}
+
+export type BulletSection = 'experience' | 'projects';
+
+export interface DroppedBullet {
+  section: BulletSection;
+  section_index: number;
+  bullet_text: string;
+  reason: 'one-page-fit';
+}
+
+export interface KeywordScore {
+  matched: string[];
+  missing: string[];
+  score: number;
+}
+
+export interface TailorResult {
+  base: BaseResume;
+  tailored: TailoredResume;
+  dropped_bullets: DroppedBullet[];
+  ats: KeywordScore;
+  ats_base: KeywordScore;
+  tokens: number;
+  cost_usd: number;
+  truncation_warning: boolean;
+}
+

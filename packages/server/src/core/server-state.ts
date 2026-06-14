@@ -10,7 +10,6 @@ export interface ServerDeps {
   configPath: string;
   store: JobsStore;
   tracker: ObservableTracker;
-  secrets: Secrets;
   bus: EventBus;
 }
 
@@ -170,6 +169,10 @@ export class ServerController {
 
   private async runOneCycle(): Promise<void> {
     const config = loadConfig(this.deps.configPath);
+    const secrets: Secrets = {
+      serpapi: config.secrets.serpapi_key,
+      openai: config.secrets.openai_key,
+    };
     const usage = await this.deps.tracker.monthlyUsage();
 
     const cycleId = newCycleId();
@@ -205,7 +208,7 @@ export class ServerController {
       const summary = await processCycle(
         config,
         this.deps.store,
-        this.deps.secrets,
+        secrets,
         this.deps.tracker,
         cycleId,
         cycleLog,

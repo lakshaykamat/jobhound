@@ -5,10 +5,14 @@ import path from 'path';
 import { loadConfig, validateConfig } from '../../src/config';
 import { makeConfig } from '../_helpers/factories';
 
-function writeConfig(data: unknown): string {
+function writeConfig(data: Record<string, unknown>): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'jf-cfg-'));
   const p = path.join(dir, 'config.json');
-  writeFileSync(p, JSON.stringify(data), 'utf-8');
+  const withSecrets = {
+    secrets: { serpapi_key: 'test-serpapi-key', openai_key: 'test-openai-key' },
+    ...data,
+  };
+  writeFileSync(p, JSON.stringify(withSecrets), 'utf-8');
   return p;
 }
 

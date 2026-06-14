@@ -1,4 +1,4 @@
-import { FitProfile, JobRecord, RawPosting } from '../../src/types';
+import { BaseResume, FitProfile, JobRecord, RawPosting, TailoredResume } from '../../src/types';
 import { AppConfig } from '../../src/config';
 import { DEFAULT_SCORE_AXIS_WEIGHTS } from '../../src/constants';
 
@@ -69,6 +69,7 @@ export interface ConfigOverrides {
   openai?: Partial<AppConfig['openai']>;
   scoring?: Partial<AppConfig['scoring']>;
   profile?: Partial<FitProfile>;
+  secrets?: Partial<AppConfig['secrets']>;
 }
 
 export function makeConfig(overrides: ConfigOverrides = {}): AppConfig {
@@ -105,5 +106,98 @@ export function makeConfig(overrides: ConfigOverrides = {}): AppConfig {
       ...(overrides.scoring ?? {}),
     },
     profile: makeProfile(overrides.profile),
+    secrets: {
+      serpapi_key: 'test-serpapi-key',
+      openai_key: 'test-openai-key',
+      ...(overrides.secrets ?? {}),
+    },
+  };
+}
+
+export function makeBaseResume(overrides: Partial<BaseResume> = {}): BaseResume {
+  return {
+    contact: {
+      name: 'Jane Doe',
+      email: 'jane@example.com',
+      phone: '+91 90000 00000',
+      location: 'Bengaluru, India',
+      links: [{ label: 'GitHub', url: 'https://github.com/jane' }],
+    },
+    summary: 'Backend engineer with 4 years building distributed services.',
+    experience: [
+      {
+        company: 'Acme',
+        title: 'Senior Backend Engineer',
+        dates: 'Jan 2023 – Present',
+        location: 'Remote',
+        bullets: [
+          'Led migration from monolith to microservices on Kubernetes.',
+          'Reduced p99 latency by 40% by introducing Redis caching tier.',
+          'Mentored 3 mid-level engineers on event-driven architecture.',
+        ],
+      },
+      {
+        company: 'Globex',
+        title: 'Software Engineer',
+        dates: '2020 – 2022',
+        location: 'Bengaluru',
+        bullets: [
+          'Built REST APIs serving 2M requests/day on Node.js + Postgres.',
+          'Owned CI/CD pipeline migration to GitHub Actions.',
+        ],
+      },
+    ],
+    projects: [
+      {
+        name: 'OpenRails',
+        link: 'https://github.com/jane/openrails',
+        bullets: ['CLI tool for railway timetables, 1k stars on GitHub.'],
+      },
+    ],
+    skills: ['TypeScript', 'Node.js', 'PostgreSQL', 'Redis', 'Kubernetes', 'AWS', 'GraphQL'],
+    education: [
+      {
+        school: 'IIT Bombay',
+        degree: 'B.Tech Computer Science',
+        dates: '2016 – 2020',
+        details: 'GPA 8.9/10',
+      },
+    ],
+    source_pdf_name: 'jane_doe_resume.pdf',
+    parsed_at: '12/06/2026',
+    ...overrides,
+  };
+}
+
+export function makeTailoredResume(overrides: Partial<TailoredResume> = {}): TailoredResume {
+  return {
+    contact: {
+      name: 'Jane Doe',
+      email: 'jane@example.com',
+      phone: '+91 90000 00000',
+      location: 'Bengaluru, India',
+      links: [{ label: 'GitHub', url: 'https://github.com/jane' }],
+    },
+    summary: 'Backend engineer specializing in Node.js APIs and distributed systems.',
+    experience: [
+      {
+        company: 'Acme',
+        title: 'Senior Backend Engineer',
+        dates: 'Jan 2023 – Present',
+        location: 'Remote',
+        bullets: [
+          { text: 'Led microservices migration on Kubernetes.', jd_relevance: 0.9 },
+          { text: 'Cut p99 latency 40% via Redis caching.', jd_relevance: 0.7 },
+          { text: 'Mentored 3 engineers on event-driven design.', jd_relevance: 0.3 },
+        ],
+      },
+    ],
+    projects: [],
+    skills: ['TypeScript', 'Node.js', 'PostgreSQL', 'Redis', 'Kubernetes'],
+    education: [
+      { school: 'IIT Bombay', degree: 'B.Tech CS', dates: '2016 – 2020', details: null },
+    ],
+    must_have_keywords: ['Node.js', 'Kubernetes'],
+    ...overrides,
   };
 }

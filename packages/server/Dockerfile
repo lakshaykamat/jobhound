@@ -29,4 +29,4 @@ ENV TZ=UTC
 COPY --from=deploy /prod/server ./
 COPY packages/server/web ./web
 EXPOSE 8787
-CMD ["node", "dist/cli/server.js", "/app/config.json"]
+CMD ["node", "dist/cli/server.js"]

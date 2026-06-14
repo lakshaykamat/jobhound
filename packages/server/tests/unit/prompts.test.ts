@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   ANALYZE_SCHEMA,
+  PARSE_RESUME_SCHEMA,
   SCORE_SCHEMA,
   buildAnalyzePrompt,
+  buildParseResumePrompt,
   buildScorePrompt,
 } from '../../src/prompts';
-import { DESCRIPTION_MAX_CHARS } from '../../src/constants';
+import { DESCRIPTION_MAX_CHARS, RESUME_TEXT_MAX_CHARS } from '../../src/constants';
 import { makeProfile, makeRecord } from '../_helpers/factories';
 
 describe('buildAnalyzePrompt', () => {
@@ -102,12 +104,42 @@ describe('buildScorePrompt', () => {
   });
 });
 
+describe('buildParseResumePrompt', () => {
+  it('embeds the raw extracted text', () => {
+    const prompt = buildParseResumePrompt('Jane Doe\nSoftware Engineer\nExperience at Acme');
+    expect(prompt).toContain('Jane Doe');
+    expect(prompt).toContain('Acme');
+  });
+
+  it('truncates very long input', () => {
+    const long = 'x'.repeat(RESUME_TEXT_MAX_CHARS + 1000);
+    const prompt = buildParseResumePrompt(long);
+    expect(prompt.length).toBeLessThan(RESUME_TEXT_MAX_CHARS + 1000);
+  });
+
+  it('falls back to placeholder when input is empty', () => {
+    expect(buildParseResumePrompt('   ')).toContain('(no text extracted)');
+  });
+});
+
 describe('schemas are exported and valid-shaped', () => {
   it('analyze schema specifies required work_mode and seniority', () => {
     expect(ANALYZE_SCHEMA.name).toBe('analyze_posting');
     expect((ANALYZE_SCHEMA.schema as { required: string[] }).required).toEqual([
       'work_mode',
       'seniority',
+    ]);
+  });
+
+  it('parse-resume schema requires all six top-level fields', () => {
+    expect(PARSE_RESUME_SCHEMA.name).toBe('parse_resume');
+    expect((PARSE_RESUME_SCHEMA.schema as { required: string[] }).required).toEqual([
+      'contact',
+      'summary',
+      'experience',
+      'projects',
+      'skills',
+      'education',
     ]);
   });
 

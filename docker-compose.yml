@@ -15,5 +15,6 @@ services:
     ports:
       - "8787:8787"
     volumes:
-      - ./packages/server/config.json:/app/config.json
+      # Everything persisted (config.json, jobs, cycles, resume, usage) lives here.
+      # Override the host path when deploying to a VM so the data outlives the container.
       - ./packages/server/.data:/app/.data

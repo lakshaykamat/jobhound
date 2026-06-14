@@ -1,8 +1,5 @@
-import { existsSync } from 'fs';
-import { loadConfig, AppConfig } from '../config';
+import { AppConfig, tryLoadConfig } from '../config';
 import { logger } from '../logger';
-
-const REQUIRED_ENV = ['SERPAPI_KEY', 'OPENAI_KEY'];
 
 export interface StartupCheck {
   configPath: string;
@@ -10,60 +7,33 @@ export interface StartupCheck {
 }
 
 export interface StartupResult {
-  config: AppConfig;
-  env: Record<string, string>;
-}
-
-export class StartupValidationError extends Error {
-  readonly errors: string[];
-  constructor(errors: string[]) {
-    super(`startup validation failed (${errors.length} issue${errors.length === 1 ? '' : 's'})`);
-    this.name = 'StartupValidationError';
-    this.errors = errors;
-  }
+  config: AppConfig | null;
 }
 
 export function validateStartup(opts: StartupCheck): StartupResult {
-  const errors: string[] = [];
+  const config = tryLoadConfig(opts.configPath);
 
-  if (!existsSync(opts.configPath)) {
-    errors.push(`config file not found at "${opts.configPath}"`);
-  }
-
-  const env: Record<string, string> = {};
-  for (const k of REQUIRED_ENV) {
-    const v = process.env[k];
-    if (!v) errors.push(`env var ${k} is required`);
-    else env[k] = v;
-  }
-
-  let config: AppConfig | null = null;
-  if (existsSync(opts.configPath)) {
-    try {
-      config = loadConfig(opts.configPath);
-    } catch (err) {
-      errors.push(`config: ${(err as Error).message}`);
-    }
-  }
-
-  if (errors.length > 0) {
-    for (const e of errors) logger.error('startup validation issue', { issue: e });
-    throw new StartupValidationError(errors);
+  if (!config) {
+    logger.warn(
+      'no valid config.json found; server will boot but cycles cannot run until config is saved via the Setup page',
+      { config_path: opts.configPath, data_dir: opts.dataDir },
+    );
+    return { config: null };
   }
 
   logger.info('startup validation passed', {
     config_path: opts.configPath,
     data_dir: opts.dataDir,
-    queries: config!.cycle.queries.length,
-    model: config!.openai.model,
-    llm_concurrency: config!.openai.llm_concurrency,
-    poll_interval_seconds: config!.server.poll_interval_seconds,
-    http_port: config!.server.http_port,
-    score_threshold: config!.cycle.score_threshold,
-    dedup_strategy: config!.cycle.dedup_strategy,
-    platforms: config!.serpapi.platforms.length,
-    region: `${config!.serpapi.country}/${config!.serpapi.language}`,
+    queries: config.cycle.queries.length,
+    model: config.openai.model,
+    llm_concurrency: config.openai.llm_concurrency,
+    poll_interval_seconds: config.server.poll_interval_seconds,
+    http_port: config.server.http_port,
+    score_threshold: config.cycle.score_threshold,
+    dedup_strategy: config.cycle.dedup_strategy,
+    platforms: config.serpapi.platforms.length,
+    region: `${config.serpapi.country}/${config.serpapi.language}`,
   });
 
-  return { config: config!, env };
+  return { config };
 }

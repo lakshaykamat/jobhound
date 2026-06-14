@@ -1,4 +1,5 @@
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'fs';
+import path from 'path';
 import { logger } from './logger';
 import {
   DEFAULT_DEALBREAKER_SCORE_CAP,
@@ -54,6 +55,11 @@ export interface ScoringConfig {
   recency_decay_days: number;
 }
 
+export interface SecretsConfig {
+  serpapi_key: string;
+  openai_key: string;
+}
+
 export interface AppConfig {
   cycle: CycleConfig;
   server: ServerConfig;
@@ -61,19 +67,21 @@ export interface AppConfig {
   openai: OpenAiConfig;
   scoring: ScoringConfig;
   profile: FitProfile;
+  secrets: SecretsConfig;
 }
 
-interface ConfigFile {
+export interface ConfigFile {
   cycle?: Partial<CycleConfig> & { query?: string; roles?: string[]; locations?: string[] };
   server?: Partial<ServerConfig>;
   serpapi?: Partial<SerpApiConfig>;
   openai?: Partial<OpenAiConfig>;
   scoring?: Partial<ScoringConfig>;
   profile?: Record<string, unknown>;
+  secrets?: Partial<SecretsConfig>;
 }
 
-export function loadConfig(path: string): AppConfig {
-  const raw = JSON.parse(readFileSync(path, 'utf-8')) as ConfigFile;
+export function loadConfig(filePath: string): AppConfig {
+  const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as ConfigFile;
   if (!raw.profile) {
     throw new Error('config must define "profile" with a FitProfile');
   }
@@ -82,7 +90,28 @@ export function loadConfig(path: string): AppConfig {
   return cfg;
 }
 
-function buildConfig(raw: ConfigFile): AppConfig {
+export function tryLoadConfig(filePath: string): AppConfig | null {
+  if (!existsSync(filePath)) return null;
+  try {
+    return loadConfig(filePath);
+  } catch (err) {
+    logger.warn('config file present but invalid', { path: filePath, err });
+    return null;
+  }
+}
+
+export function saveConfig(filePath: string, cfg: AppConfig): void {
+  validateConfig(cfg);
+  const tmp = `${filePath}.tmp`;
+  writeFileSync(tmp, JSON.stringify(cfg, null, 2), 'utf-8');
+  renameSync(tmp, filePath);
+}
+
+export function configPathFor(dataDir: string): string {
+  return path.join(dataDir, 'config.json');
+}
+
+export function buildConfig(raw: ConfigFile): AppConfig {
   return {
     cycle: {
       queries: normalizeQueries(raw.cycle),
@@ -118,6 +147,10 @@ function buildConfig(raw: ConfigFile): AppConfig {
       recency_decay_days: raw.scoring?.recency_decay_days ?? DEFAULT_RECENCY_DECAY_DAYS,
     },
     profile: normalizeProfile(raw.profile!),
+    secrets: {
+      serpapi_key: (raw.secrets?.serpapi_key ?? process.env.SERPAPI_KEY ?? '').trim(),
+      openai_key: (raw.secrets?.openai_key ?? process.env.OPENAI_KEY ?? '').trim(),
+    },
   };
 }
 
@@ -160,6 +193,10 @@ export function validateConfig(cfg: AppConfig): void {
   if (cfg.scoring.dealbreaker_score_cap < 0 || cfg.scoring.dealbreaker_score_cap > 100) {
     errs.push('scoring.dealbreaker_score_cap must be in [0, 100]');
   }
+
+  // secrets
+  if (!cfg.secrets.serpapi_key) errs.push('secrets.serpapi_key is required');
+  if (!cfg.secrets.openai_key) errs.push('secrets.openai_key is required');
 
   // profile sanity
   if (cfg.profile.skills.length === 0) errs.push('profile.skills should not be empty');
