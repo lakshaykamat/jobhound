@@ -105,8 +105,17 @@ function contactLine(contact: ContactBlock): string {
   if (contact.email) parts.push(contact.email);
   if (contact.phone) parts.push(contact.phone);
   if (contact.location) parts.push(contact.location);
-  for (const link of contact.links) parts.push(link.url || link.label);
+  for (const link of contact.links) parts.push(contactLinkLabel(link));
   return parts.filter((p) => p.length > 0).join('  •  ');
+}
+
+function contactLinkLabel(link: ContactBlock['links'][number]): string {
+  const label = link.label.trim();
+  const url = link.url.trim();
+  const source = `${label} ${url}`.toLowerCase();
+  if (source.includes('linkedin')) return 'LinkedIn';
+  if (source.includes('github')) return 'GitHub';
+  return label || url;
 }
 
 // ---------- section heading ----------
@@ -144,7 +153,6 @@ function drawExperience(doc: PDFKit.PDFDocument, jobs: TailoredJob[]): void {
   drawSectionHeading(doc, 'Experience');
   jobs.forEach((job, i) => {
     drawRoleLine(doc, `${job.title}, ${job.company}`, job.dates);
-    if (job.location) doc.font(FONT_OBLIQUE).fontSize(SIZE_DATES).fillColor('#737373').text(job.location, { width: CONTENT_WIDTH });
     doc.moveDown(GAP_AFTER_ROLE_LINE / SIZE_BODY);
     drawBullets(doc, job.bullets.map((b) => b.text));
     if (i < jobs.length - 1) doc.moveDown(GAP_BETWEEN_ENTRIES / SIZE_BODY);
@@ -156,10 +164,6 @@ function measureExperience(doc: PDFKit.PDFDocument, jobs: TailoredJob[]): number
   let h = measureSectionHeading(doc, 'Experience');
   jobs.forEach((job, i) => {
     h += measureRoleLine(doc, `${job.title}, ${job.company}`, job.dates);
-    if (job.location) {
-      doc.font(FONT_OBLIQUE).fontSize(SIZE_DATES);
-      h += doc.heightOfString(job.location, { width: CONTENT_WIDTH });
-    }
     h += GAP_AFTER_ROLE_LINE;
     h += measureBullets(doc, job.bullets.map((b) => b.text));
     if (i < jobs.length - 1) h += GAP_BETWEEN_ENTRIES;
@@ -172,7 +176,7 @@ function measureExperience(doc: PDFKit.PDFDocument, jobs: TailoredJob[]): number
 function drawProjects(doc: PDFKit.PDFDocument, projects: TailoredProject[]): void {
   drawSectionHeading(doc, 'Projects');
   projects.forEach((proj, i) => {
-    drawRoleLine(doc, proj.name, proj.link ?? '');
+    drawProjectLine(doc, proj.name, proj.link);
     doc.moveDown(GAP_AFTER_ROLE_LINE / SIZE_BODY);
     drawBullets(doc, proj.bullets.map((b) => b.text));
     if (i < projects.length - 1) doc.moveDown(GAP_BETWEEN_ENTRIES / SIZE_BODY);
@@ -183,7 +187,7 @@ function drawProjects(doc: PDFKit.PDFDocument, projects: TailoredProject[]): voi
 function measureProjects(doc: PDFKit.PDFDocument, projects: TailoredProject[]): number {
   let h = measureSectionHeading(doc, 'Projects');
   projects.forEach((proj, i) => {
-    h += measureRoleLine(doc, proj.name, proj.link ?? '');
+    h += measureProjectLine(doc, proj.name, proj.link);
     h += GAP_AFTER_ROLE_LINE;
     h += measureBullets(doc, proj.bullets.map((b) => b.text));
     if (i < projects.length - 1) h += GAP_BETWEEN_ENTRIES;
@@ -208,6 +212,27 @@ function measureRoleLine(doc: PDFKit.PDFDocument, left: string, right: string): 
   doc.font(FONT_REGULAR).fontSize(SIZE_DATES);
   const rightH = right ? doc.heightOfString(right, { width: CONTENT_WIDTH }) : 0;
   return Math.max(leftH, rightH);
+}
+
+function drawProjectLine(doc: PDFKit.PDFDocument, name: string, link: string | null): void {
+  const y = doc.y;
+  doc.font(FONT_BOLD).fontSize(SIZE_ROLE).fillColor('#0a0a0a').text(name, MARGIN, y, { width: CONTENT_WIDTH * 0.7 });
+  if (link) {
+    doc
+      .font(FONT_REGULAR)
+      .fontSize(SIZE_DATES)
+      .fillColor('#1d4ed8')
+      .text('Project link', MARGIN, y, { width: CONTENT_WIDTH, align: 'right', link, underline: true });
+  }
+  doc.fillColor('black');
+}
+
+function measureProjectLine(doc: PDFKit.PDFDocument, name: string, link: string | null): number {
+  doc.font(FONT_BOLD).fontSize(SIZE_ROLE);
+  const nameH = doc.heightOfString(name, { width: CONTENT_WIDTH * 0.7 });
+  doc.font(FONT_REGULAR).fontSize(SIZE_DATES);
+  const linkH = link ? doc.heightOfString('Project link', { width: CONTENT_WIDTH }) : 0;
+  return Math.max(nameH, linkH);
 }
 
 // ---------- bullets ----------
