@@ -3,12 +3,10 @@ import {
   DESCRIPTION_MAX_CHARS,
   RESUME_TEXT_MAX_CHARS,
   TAILOR_JD_MAX_CHARS,
-  TAILOR_MAX_BULLETS_PER_JOB,
-  TAILOR_MAX_BULLETS_PER_PROJECT,
   TAILOR_MAX_BULLET_CHARS,
   TAILOR_MAX_SKILLS,
 } from './constants';
-import { BaseResume, FitProfile, JobRecord, RawPosting, TailoredResume } from './types';
+import { BaseResume, FitProfile, JobRecord, RawPosting } from './types';
 
 // =====================================================================
 // Analyze — normalize loose posting fields when regex heuristics fail.
@@ -361,62 +359,54 @@ export const PARSE_RESUME_SCHEMA: JsonSchemaSpec = {
 };
 
 // =====================================================================
-// Tailor — rewrite a base resume to align with a single job description.
-// No fabrication: skills subset of base; experience/projects/education
-// are reordered/paraphrased subsets of base.
+// Tailor — produce text patches against the stored resume. The server
+// applies and validates patches; the model never rebuilds a resume.
 // =====================================================================
 
-export const TAILOR_SYSTEM_PROMPT = `You aggressively tailor a base resume to maximize ATS coverage of a specific job description (JD). The operator has explicitly opted into JD-driven embellishment within the skills and bullet sections to land more interviews.
+export const TAILOR_SYSTEM_PROMPT = `You tailor one base resume to one job description for ATS keyword coverage.
 
 You output structured JSON only.
 
-The single goal: when an ATS parses this resume against the JD, every required keyword should appear in the form the JD uses, in a section the ATS weights.
+Goal: produce a minimal patch list that edits the existing resume text in place. Do NOT output a full resume. Do NOT reorder, add, or remove experience/projects/education entries.
 
-HARD RULES (the validator rejects responses that break any of these — these OVERRIDE every ATS optimization rule below):
-- "skills" is a JD-DRIVEN list. Start from the base resume's skills, then add any JD must-have / preferred skills the candidate could plausibly know — the operator has opted into this. Pull JD-required skills to the front (in JD-prominence order), then JD-preferred, then remaining base skills. Use the JD's exact casing and tokenization.
-- "experience" companies, titles, and dates must each match a base experience entry exactly (case-insensitive company match; verbatim title and dates). You may drop irrelevant entries. You may NOT add or rename employers, change titles, or alter dates — these are reference-checkable.
-- "projects" names and links must each match a base project entry. You may NOT invent projects.
-- "education" entries must match base education entries verbatim.
-- Bullets MAY embellish content for JD alignment. You may swap in JD phrasing, change verbs, add JD-relevant metrics, scope, team sizes, technologies, and clauses — even when the base bullet does not state them — as long as the bullet stays attached to a real (base) company / title / project. Keep claims plausible for the role and seniority; do not over-claim leadership the base never hints at.
-- Each tailored bullet is ONE complete standalone sentence. You may NOT split a single base bullet into multiple tailored bullets. You may NOT start a bullet with "…", "...", "and ", "or ", "but ", or any continuation marker — these fragments read as broken sentences in the rendered PDF.
-- Contact block: copy verbatim from the base resume.
+PATCH RULES:
+- Valid ops: "replace_summary", "set_skills", "replace_experience_bullet", "replace_project_bullet".
+- Every patch must include exact old_text / old_skills copied from CURRENT RESUME. The server rejects patches whose old value does not match.
+- For fields not used by an op, return null (or [] for skill arrays). Example: "set_skills" uses old_skills/new_skills and sets old_text/new_text/company/title/dates/project/bullet_index/jd_relevance to null.
+- Use the smallest patch set that materially improves JD keyword coverage. Prefer 3-8 patches.
 
-LAYOUT CAPS (the validator rejects responses that break any of these — count characters, not words):
-- Each experience entry: at most ${TAILOR_MAX_BULLETS_PER_JOB} bullets.
-- Each project entry: at most ${TAILOR_MAX_BULLETS_PER_PROJECT} bullets.
-- Each bullet: at most ${TAILOR_MAX_BULLET_CHARS} characters INCLUDING spaces and punctuation. Stay under the cap by trimming the weakest clause rather than overshooting — bullets that exceed the cap get hard-truncated mid-clause downstream, which loses your strongest content.
-- "skills" total length: at most ${TAILOR_MAX_SKILLS} entries.
+LOCKED FACTS:
+- Never edit contact, company names, titles, dates, locations, project names, project links, education, source_pdf_name, or parsed_at.
+- Experience bullet patches must reference an existing company/title/dates tuple and a real zero-based bullet_index.
+- Project bullet patches must reference an existing project name and a real zero-based bullet_index.
+- Education is never ATS-tailored. Do not add degree requirements from the JD to the summary, skills, bullets, or projects unless that exact credential already exists in the base education.
 
-ATS OPTIMIZATION (apply these only WITHIN the HARD RULES and LAYOUT CAPS above):
+TEXT RULES:
+- Summary may be rewritten as 1-3 dense ATS-friendly sentences.
+- Skills are JD-driven. Start with JD hard skills in JD order, then preferred skills, then remaining base skills. Add a JD skill only when explicit in the JD and plausible for the base resume. Use the JD's exact casing and tokenization.
+- Skills total length: at most ${TAILOR_MAX_SKILLS} entries.
+- Each bullet replacement must be one complete standalone sentence.
+- Each bullet replacement must be at most ${TAILOR_MAX_BULLET_CHARS} characters including spaces and punctuation.
+- Do not start a bullet with "...", "…", "and ", "or ", or "but ".
+- Bullets may use JD wording and plausible JD-relevant clauses, but each bullet must stay attached to a real base company/title/project. Do not over-claim leadership the base never hints at.
 
-1. Mirror the JD's exact phrasing inside bullets and skills.
-   ATS keyword matching is largely string-level. Use the JD's exact casing, word order, and punctuation for must-have terms (e.g., the JD says "RESTful API development" → use that phrase, not "REST endpoints"). This includes adding JD-required tech, methodologies, and tools into bullets even when the base bullet did not name them — the bullet stays attached to a real company/title, but its content can be tuned to the JD.
-
-2. Front-load JD keywords in bullet openings.
-   ATS rankers and human skimmers weight bullet openings more heavily, so lead each bullet with the JD's preferred verb + the JD-required tech / method. Rewrite the bullet around the keyword when needed.
-
-3. Distribute keywords — do not stuff.
-   Each must-have keyword should appear in at least one bullet plus the skills section. Repeating the same keyword 4+ times across bullets is keyword stuffing and modern ATS rankers (and recruiters) penalize it. Aim for natural integration, not density.
-
-4. Use the JD's preferred action verbs.
-   If the JD uses "designed", "owned", "shipped", "led", "scaled", "architected" — reach for the same verbs. Keep elevation plausible: a candidate whose base reads "junior engineer, 1 yoe" should not be "architected the platform". A mid/senior base supports stronger verbs.
-
-5. Skills section: JD-required → JD-preferred → remaining base skills.
-   Pull JD-required skills to the front (in JD-prominence order), then JD-preferred, then keep the operator's remaining base skills. Add JD-required skills missing from base when plausible. Stay under the ${TAILOR_MAX_SKILLS} cap; when forced to drop, drop the least JD-relevant entry.
+ATS WRITING:
+- Mirror exact JD terms in skills, summary, and at least one bullet when plausible.
+- Front-load the strongest JD terms in bullet openings.
+- Do not keyword-stuff. One natural mention is enough for most terms.
+- Use the JD's action verbs only when they fit the base seniority.
 
 KEYWORDS FIELD:
-- "must_have_keywords" lists the concrete technologies, tools, methods, frameworks, certifications, and hard qualifications the JD specifies as required (not nice-to-have, not soft skills).
-- Emit each item as an ATOMIC technical term — one tool, one technology, one concept per entry. Split JD compound phrases that bundle multiple items: "MySQL/PostgreSQL" → ["MySQL", "PostgreSQL"]; "Redis & Caching" → ["Redis", "Caching"]; "React/Vue/Angular" → ["React", "Vue", "Angular"]; "CI/CD" stays "CI/CD" (it is one concept). Split on slashes, ampersands, commas, and the words "and" / "or" when they join distinct items.
-- Strip filler qualifier words. "NGINX Basics" → "NGINX"; "Linux Fundamentals" → "Linux"; "Strong DSA knowledge" → "DSA"; "Working knowledge of Docker" → "Docker"; "Hands-on experience with Kafka" → "Kafka". Drop words like "Basics", "Fundamentals", "Knowledge", "Experience", "Strong", "Working", "Hands-on", "Proficient in".
+- "must_have_keywords" drives the UI ATS score. Include ONLY explicit JD hard requirements: technologies, tools, methods, frameworks, certifications, degrees, and hard qualifications.
+- Do NOT include inferred gaps, advice, comparisons, negative notes, or terms absent from the JD. Never emit entries like "React (not in JD)", "Node.js/NestJS (not in JD)", "Microsoft stack emphasis", or "education mismatch".
+- Do NOT include nice-to-have items unless the JD clearly treats them as required.
+- Emit atomic terms: one tool, technology, concept, degree, or qualification per entry. Split compounds: "MS SQL 2012, .NET Framework, C#" -> ["MS SQL 2012", ".NET Framework", "C#"]; "XML/XSLT" -> ["XML", "XSLT"]; "CSS, JavaScript" -> ["CSS", "JavaScript"]. Keep "CI/CD" as one term.
+- Strip filler qualifiers. "Knowledge of SQL Server" -> "SQL Server"; "Familiarity in database redesign with normalization" -> "database redesign", "normalization".
 - Use the JD's exact casing and tokenization for the atomic term itself ("Postgres" stays "Postgres", "PostgreSQL" stays "PostgreSQL"). Preserve common compound tokens that are a single technology: ".NET", "Node.js", "C++", "CI/CD", "GraphQL".
-- If the JD lists both "Postgres" and "PostgreSQL" separately, include both.
-- Deduplicate (case-insensitive). This field drives a downstream ATS coverage report, so completeness matters more than brevity.
+- Deduplicate case-insensitively. Prefer precision over length.
 
 RELEVANCE SCORING:
-- Every bullet carries a jd_relevance score in [0, 1]. 1.0 = directly matches a JD must-have. 0.6-0.9 = adjacent or JD-preferred. 0.1-0.5 = generic engineering content. 0.0 = unrelated. Be honest — the renderer drops the lowest-scoring bullets to fit one page, and dishonest scores produce a worse final resume.
-
-SUMMARY:
-- Compose 1-3 sentences as a dense, ATS-friendly opener. Lead with the candidate's role identity using the JD's job title (keep it plausible for the base resume's level), then weave in 3-5 of the JD's must-have keywords using the JD's exact phrasing. No clichés ("results-driven", "passionate about"); no first-person pronouns.`;
+- Bullet patches carry jd_relevance in [0, 1]. 1.0 = directly matches a JD must-have. 0.6-0.9 = adjacent or JD-preferred. 0.1-0.5 = generic engineering content. 0.0 = unrelated. Be honest.`;
 
 export function buildTailorPrompt(base: BaseResume, jd: string): string {
   const trimmedJd = jd.trim();
@@ -427,68 +417,54 @@ ${JSON.stringify(base, null, 2)}
 JOB DESCRIPTION:
 ${jdBlock}
 
-Produce the tailored JSON now.`;
+Produce the patch JSON now.`;
 }
 
-const TAILORED_BULLET_SCHEMA = {
+const TAILOR_PATCH_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['text', 'jd_relevance'],
+  required: [
+    'op',
+    'reason',
+    'old_text',
+    'new_text',
+    'old_skills',
+    'new_skills',
+    'company',
+    'title',
+    'dates',
+    'project',
+    'bullet_index',
+    'jd_relevance',
+  ],
   properties: {
-    text: { type: 'string' },
-    jd_relevance: { type: 'number' },
-  },
-} as const;
-
-const TAILORED_JOB_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['company', 'title', 'dates', 'location', 'bullets'],
-  properties: {
-    company: { type: 'string' },
-    title: { type: 'string' },
-    dates: { type: 'string' },
-    location: { type: ['string', 'null'] },
-    bullets: { type: 'array', items: TAILORED_BULLET_SCHEMA },
-  },
-} as const;
-
-const TAILORED_PROJECT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['name', 'link', 'bullets'],
-  properties: {
-    name: { type: 'string' },
-    link: { type: ['string', 'null'] },
-    bullets: { type: 'array', items: TAILORED_BULLET_SCHEMA },
+    op: {
+      type: 'string',
+      enum: ['replace_summary', 'set_skills', 'replace_experience_bullet', 'replace_project_bullet'],
+    },
+    reason: { type: 'string' },
+    old_text: { type: ['string', 'null'] },
+    new_text: { type: ['string', 'null'] },
+    old_skills: { type: 'array', items: { type: 'string' } },
+    new_skills: { type: 'array', items: { type: 'string' } },
+    company: { type: ['string', 'null'] },
+    title: { type: ['string', 'null'] },
+    dates: { type: ['string', 'null'] },
+    project: { type: ['string', 'null'] },
+    bullet_index: { type: ['number', 'null'] },
+    jd_relevance: { type: ['number', 'null'] },
   },
 } as const;
 
 export const TAILOR_REFINE_SYSTEM_PROMPT = `${TAILOR_SYSTEM_PROMPT}
 
 REFINEMENT MODE:
-You are receiving an existing tailored draft along with the base resume and JD. The user has edited the draft. Polish their draft — keep their structural choices (which jobs, which bullets they kept, their skill ordering) while improving wording, JD alignment, and keyword density. Treat their edits as intent signals, not noise. Do NOT revert their changes unless the change violates a HARD RULE above.
+You are receiving a resume that already has previous patches applied. Produce additional patches against that CURRENT RESUME. Do not repeat old patches whose old_text no longer matches.
 
-Your output is a refined tailored resume that obeys the same caps and rules as before.`;
-
-export function buildTailorRefinePrompt(base: BaseResume, draft: TailoredResume, jd: string): string {
-  const trimmedJd = jd.trim();
-  const jdBlock = trimmedJd.length > 0 ? trimmedJd.slice(0, TAILOR_JD_MAX_CHARS) : '(empty JD)';
-  return `BASE RESUME (source of truth for facts):
-${JSON.stringify(base, null, 2)}
-
-USER'S CURRENT DRAFT (refine this — do not start over):
-${JSON.stringify(draft, null, 2)}
-
-JOB DESCRIPTION:
-${jdBlock}
-
-Return the refined tailored JSON now.`;
-}
+Your output is a patch JSON that obeys the same caps and rules as before.`;
 
 export function buildTailorAtsRetryPrompt(
-  base: BaseResume,
-  draft: TailoredResume,
+  current: BaseResume,
   jd: string,
   missingKeywords: string[],
   matchedKeywords: string[],
@@ -501,11 +477,8 @@ export function buildTailorAtsRetryPrompt(
     ? missingKeywords.map((k) => `- ${k}`).join('\n')
     : '(none)';
   const matchedList = matchedKeywords.length > 0 ? matchedKeywords.join(', ') : '(none)';
-  return `BASE RESUME (anchor for companies, titles, dates, projects, and education — these must match exactly):
-${JSON.stringify(base, null, 2)}
-
-CURRENT DRAFT (refine this — keep its structure, close the ATS gap):
-${JSON.stringify(draft, null, 2)}
+  return `CURRENT RESUME (apply patches to this exact JSON; old_text/old_skills must match it):
+${JSON.stringify(current, null, 2)}
 
 JOB DESCRIPTION:
 ${jdBlock}
@@ -516,35 +489,20 @@ ${missingList}
 
 Keywords already matched (do NOT lose these): ${matchedList}
 
-For each missing keyword: add it to the skills section and surface it in at least one bullet (using the JD's exact phrasing). You may add the keyword to bullets even when the base bullet did not name it — the operator has opted into JD-driven bullet embellishment. Keep claims plausible for the role and seniority. HARD RULES still apply: do not add or rename employers, titles, dates, projects, or education entries.
+For each missing keyword: add it to the skills section and surface it in the summary or one existing bullet when plausible. Keep claims plausible for the role and seniority. HARD RULES still apply: do not add or rename employers, titles, dates, projects, education entries, or bullets.
 
-Return the refined tailored JSON now.`;
+Return the patch JSON now.`;
 }
 
 export const TAILOR_SCHEMA: JsonSchemaSpec = {
-  name: 'tailor_resume',
+  name: 'tailor_patch_resume',
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: [
-      'contact',
-      'summary',
-      'experience',
-      'projects',
-      'skills',
-      'education',
-      'must_have_keywords',
-    ],
+    required: ['patches', 'must_have_keywords'],
     properties: {
-      contact: RESUME_CONTACT_SCHEMA,
-      summary: { type: 'string' },
-      experience: { type: 'array', items: TAILORED_JOB_SCHEMA },
-      projects: { type: 'array', items: TAILORED_PROJECT_SCHEMA },
-      skills: { type: 'array', items: { type: 'string' } },
-      education: { type: 'array', items: RESUME_EDUCATION_SCHEMA },
+      patches: { type: 'array', items: TAILOR_PATCH_SCHEMA },
       must_have_keywords: { type: 'array', items: { type: 'string' } },
     },
   },
 };
-
-

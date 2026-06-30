@@ -3,6 +3,7 @@ import {
   ANALYZE_SCHEMA,
   PARSE_RESUME_SCHEMA,
   SCORE_SCHEMA,
+  TAILOR_SYSTEM_PROMPT,
   buildAnalyzePrompt,
   buildParseResumePrompt,
   buildScorePrompt,
@@ -119,6 +120,15 @@ describe('buildParseResumePrompt', () => {
 
   it('falls back to placeholder when input is empty', () => {
     expect(buildParseResumePrompt('   ')).toContain('(no text extracted)');
+  });
+});
+
+describe('tailor prompt', () => {
+  it('keeps must-have keywords limited to explicit JD hard requirements', () => {
+    expect(TAILOR_SYSTEM_PROMPT).toContain('Include ONLY explicit JD hard requirements');
+    expect(TAILOR_SYSTEM_PROMPT).toContain('Do NOT include inferred gaps');
+    expect(TAILOR_SYSTEM_PROMPT).toContain('Never emit entries like "React (not in JD)"');
+    expect(TAILOR_SYSTEM_PROMPT).not.toContain('aggressively tailor');
   });
 });
 

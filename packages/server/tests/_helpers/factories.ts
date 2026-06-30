@@ -195,7 +195,7 @@ export function makeTailoredResume(overrides: Partial<TailoredResume> = {}): Tai
     projects: [],
     skills: ['TypeScript', 'Node.js', 'PostgreSQL', 'Redis', 'Kubernetes'],
     education: [
-      { school: 'IIT Bombay', degree: 'B.Tech CS', dates: '2016 – 2020', details: null },
+      { school: 'IIT Bombay', degree: 'B.Tech Computer Science', dates: '2016 – 2020', details: 'GPA 8.9/10' },
     ],
     must_have_keywords: ['Node.js', 'Kubernetes'],
     ...overrides,

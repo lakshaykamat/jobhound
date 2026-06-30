@@ -78,7 +78,7 @@ export interface RawPosting {
 }
 
 // =====================================================================
-// Resume (base + tailored)
+// Resume
 // =====================================================================
 
 export interface ContactLink {
@@ -127,8 +127,8 @@ export interface BaseResume {
 }
 
 // =====================================================================
-// Tailor — per-JD output. Mirrors BaseResume but every bullet carries
-// a jd_relevance score the renderer uses for one-page drops.
+// Tailor — per-JD text patches. The tailor never rebuilds or renders a
+// resume; it proposes small text edits against the stored base resume.
 // =====================================================================
 
 export interface TailoredBullet {
@@ -160,29 +160,66 @@ export interface TailoredResume {
   must_have_keywords: string[];
 }
 
-export type BulletSection = 'experience' | 'projects';
-
-export interface DroppedBullet {
-  section: BulletSection;
-  section_index: number;
-  bullet_text: string;
-  reason: 'one-page-fit';
-}
-
 export interface KeywordScore {
   matched: string[];
   missing: string[];
   score: number;
 }
 
+export interface TailorPatchBase {
+  reason: string;
+}
+
+export interface ReplaceSummaryPatch extends TailorPatchBase {
+  op: 'replace_summary';
+  old_text: string;
+  new_text: string;
+}
+
+export interface SetSkillsPatch extends TailorPatchBase {
+  op: 'set_skills';
+  old_skills: string[];
+  new_skills: string[];
+}
+
+export interface ReplaceExperienceBulletPatch extends TailorPatchBase {
+  op: 'replace_experience_bullet';
+  company: string;
+  title: string;
+  dates: string;
+  bullet_index: number;
+  old_text: string;
+  new_text: string;
+  jd_relevance: number;
+}
+
+export interface ReplaceProjectBulletPatch extends TailorPatchBase {
+  op: 'replace_project_bullet';
+  project: string;
+  bullet_index: number;
+  old_text: string;
+  new_text: string;
+  jd_relevance: number;
+}
+
+export type TailorPatch =
+  | ReplaceSummaryPatch
+  | SetSkillsPatch
+  | ReplaceExperienceBulletPatch
+  | ReplaceProjectBulletPatch;
+
+export interface TailorPatchPlan {
+  patches: TailorPatch[];
+  must_have_keywords: string[];
+}
+
 export interface TailorResult {
   base: BaseResume;
-  tailored: TailoredResume;
-  dropped_bullets: DroppedBullet[];
+  updated: BaseResume;
+  patches: TailorPatch[];
+  must_have_keywords: string[];
   ats: KeywordScore;
   ats_base: KeywordScore;
   tokens: number;
   cost_usd: number;
-  truncation_warning: boolean;
 }
-

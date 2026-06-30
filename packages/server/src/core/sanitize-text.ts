@@ -2,7 +2,7 @@
 // codepoints (U+E000-U+F8FF and the two supplementary PUA blocks) when the
 // source PDF uses a font with a custom CMap that lacks ToUnicode entries.
 // Helvetica has no glyphs for those codepoints, so they render as garbage
-// in the tailored PDF and pollute the resume editor.
+// in generated suggestions and pollute the resume editor.
 
 const PUA_BMP = new RegExp('[\\uE000-\\uF8FF]', 'g');
 const PUA_SUP = new RegExp('[\\u{F0000}-\\u{FFFFD}\\u{100000}-\\u{10FFFD}]', 'gu');

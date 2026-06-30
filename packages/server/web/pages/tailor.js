@@ -5,7 +5,7 @@ export function renderTailor() {
         <div class="min-w-0">
           <div class="text-[10px] uppercase tracking-[0.18em] text-ink-400 font-semibold">Resume</div>
           <h1 class="text-2xl font-semibold tracking-tight mt-1.5">Tailor</h1>
-          <p class="text-sm text-ink-500 mt-1.5 max-w-2xl">Paste a job description, generate a one-page resume, then compare keyword coverage and bullet changes before downloading.</p>
+          <p class="text-sm text-ink-500 mt-1.5 max-w-2xl">Paste a job description and Jobhound updates the stored resume text directly, keeping the existing resume structure intact.</p>
         </div>
         <a href="#/resume" class="btn-secondary">Edit base resume</a>
       </header>
@@ -16,28 +16,19 @@ export function renderTailor() {
         <a href="#/resume" class="inline-flex items-center text-xs font-semibold text-ink-100 bg-ink-900 px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity">Go to Resume</a>
       </div>
 
-      <div id="tailor-run" class="tailor-workspace hidden grid grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(420px,1.1fr)] gap-5 items-start">
+      <div id="tailor-run" class="tailor-workspace hidden">
         <div class="surface rounded-xl px-6 py-5 space-y-4 flex flex-col min-w-0">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400 font-semibold">Tailor to a job</div>
-              <div class="text-xs text-ink-500 mt-1 max-w-xl">Paste the full JD. Jobhound reorders skills, rewrites bullets, and trims the lowest-relevance lines to fit one page.</div>
+              <div class="text-xs text-ink-500 mt-1 max-w-xl">Paste the full JD. Jobhound edits summary, skills, and existing bullets only.</div>
             </div>
             <button id="btn-tailor-run" class="btn-primary shrink-0" type="button">Tailor</button>
           </div>
           <textarea id="tailor-jd" placeholder="Paste the job description here..." class="tailor-textarea w-full flex-1 text-sm font-mono bg-ink-200/30 border border-ink-200 rounded-md px-3 py-2 leading-relaxed focus:outline-none focus:ring-2 focus:ring-ink-300"></textarea>
           <div class="flex items-center justify-between gap-3 text-xs text-ink-400">
             <div id="tailor-run-status" class="min-h-[18px]" role="status" aria-live="polite"></div>
-            <div class="hidden sm:block">PDF preview updates after tailoring</div>
-          </div>
-        </div>
-        <div class="xl:sticky xl:top-6 self-start min-w-0">
-          <div class="surface rounded-xl overflow-hidden">
-            <div class="px-5 py-3 flex items-center justify-between gap-3 border-b border-ink-200/60">
-              <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400 font-semibold">Preview</div>
-              <div class="text-[11px] text-ink-400 text-right truncate" id="tailor-preview-status" role="status" aria-live="polite">paste a JD and click Tailor</div>
-            </div>
-            <iframe id="tailor-preview" class="pdf-preview-frame w-full bg-white" title="Tailored resume PDF preview" loading="lazy"></iframe>
+            <div class="hidden sm:block">Stored resume updates after tailoring</div>
           </div>
         </div>
       </div>
@@ -47,7 +38,7 @@ export function renderTailor() {
           <div class="flex items-start justify-between gap-6 flex-wrap">
             <div class="min-w-0">
               <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400 font-semibold">ATS keyword match</div>
-              <div class="text-xs text-ink-500 mt-1">Base resume vs. tailored, against the JD's must-have keywords.</div>
+              <div class="text-xs text-ink-500 mt-1">Before vs. updated stored resume, against the JD's must-have keywords.</div>
               <div class="text-[11px] text-ink-400 mt-2 tabular" id="tailor-cost">—</div>
             </div>
             <div class="ats-summary ml-auto">
@@ -67,8 +58,7 @@ export function renderTailor() {
                 <div class="text-2xl font-semibold tabular mt-1" id="tailor-ats-delta">—</div>
               </div>
               <div class="ats-actions flex flex-col gap-2 pl-5 border-l border-ink-200/60">
-                <button id="btn-tailor-download" class="btn-primary">Download PDF</button>
-                <button id="btn-tailor-discard" class="btn-ghost">Discard</button>
+                <button id="btn-tailor-undo" class="btn-ghost">Undo changes</button>
               </div>
             </div>
           </div>
@@ -80,15 +70,6 @@ export function renderTailor() {
             <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400 font-semibold mb-2">Matched</div>
             <div id="tailor-ats-matched" class="flex flex-wrap gap-1.5"></div>
           </div>
-        </div>
-
-        <div id="tailor-truncation-warning" class="rounded-md border border-ink-900 bg-ink-50 text-xs text-ink-800 px-4 py-2 hidden">
-          Could not fit on one page even after dropping non-essential bullets. Consider shortening the summary or the contact line.
-        </div>
-
-        <div id="tailor-dropped" class="rounded-md border border-ink-200 bg-ink-200/30 px-4 py-3 hidden">
-          <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400 font-semibold">Dropped to fit</div>
-          <ul id="tailor-dropped-list" class="mt-2 space-y-1 text-xs text-ink-500"></ul>
         </div>
 
         <div id="tailor-diff" class="space-y-4"></div>

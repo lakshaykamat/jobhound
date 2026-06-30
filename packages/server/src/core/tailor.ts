@@ -4,8 +4,6 @@ import { costUsd } from '../pricing';
 import {
   TAILOR_ATS_MAX_RETRIES,
   TAILOR_ATS_TARGET,
-  TAILOR_MAX_BULLETS_PER_JOB,
-  TAILOR_MAX_BULLETS_PER_PROJECT,
   TAILOR_MAX_BULLET_CHARS,
   TAILOR_MAX_SKILLS,
   TAILOR_MAX_TOKENS,
@@ -16,10 +14,8 @@ import {
   TAILOR_SYSTEM_PROMPT,
   buildTailorAtsRetryPrompt,
   buildTailorPrompt,
-  buildTailorRefinePrompt,
 } from '../prompts';
-import { BaseResume, KeywordScore, TailoredResume, TailorResult } from '../types';
-import { fitToOnePage } from './one-page-fit';
+import { BaseResume, KeywordScore, TailorPatch, TailorPatchPlan, TailorResult } from '../types';
 import { scoreKeywords, scoreKeywordsBase } from './keyword-score';
 
 export class TailorValidationError extends Error {
@@ -34,20 +30,14 @@ export interface TailorOptions {
   jd: string;
   apiKey: string;
   model: string | undefined;
-  draft?: TailoredResume;
   log?: Logger;
 }
 
 export async function tailorResume(opts: TailorOptions): Promise<TailorResult> {
   const log = opts.log ?? rootLogger;
-  const userSuppliedDraft = !!opts.draft;
-  const initialSystemPrompt = userSuppliedDraft ? TAILOR_REFINE_SYSTEM_PROMPT : TAILOR_SYSTEM_PROMPT;
-  const initialUserPrompt = userSuppliedDraft
-    ? buildTailorRefinePrompt(opts.base, opts.draft!, opts.jd)
-    : buildTailorPrompt(opts.base, opts.jd);
 
   log.debug('tailor start', {
-    mode: userSuppliedDraft ? 'refine' : 'fresh',
+    mode: 'patch',
     model: opts.model ?? '(default)',
     jd_chars: opts.jd.length,
     base_skills: opts.base.skills.length,
@@ -55,49 +45,46 @@ export async function tailorResume(opts: TailorOptions): Promise<TailorResult> {
     base_projects: opts.base.projects.length,
   });
 
-  let pass = await runTailorPass(opts, initialSystemPrompt, initialUserPrompt, 0, log);
+  let pass = await runTailorPass(opts, opts.base, TAILOR_SYSTEM_PROMPT, buildTailorPrompt(opts.base, opts.jd), 0, log);
   let totalTokens = pass.tokens;
+  const appliedPatches = [...pass.patches];
 
-  // Skip ATS retries when the user supplied their own draft — they're driving.
-  if (!userSuppliedDraft) {
-    for (let retry = 1; retry <= TAILOR_ATS_MAX_RETRIES && pass.ats.score < TAILOR_ATS_TARGET; retry++) {
-      const retryPrompt = buildTailorAtsRetryPrompt(
-        opts.base,
-        pass.tailored,
-        opts.jd,
-        pass.ats.missing,
-        pass.ats.matched,
-        pass.ats.score,
-        TAILOR_ATS_TARGET,
-      );
-      log.info('tailor ats below target; retrying', {
+  for (let retry = 1; retry <= TAILOR_ATS_MAX_RETRIES && pass.ats.score < TAILOR_ATS_TARGET; retry++) {
+    const retryPrompt = buildTailorAtsRetryPrompt(
+      pass.updated,
+      opts.jd,
+      pass.ats.missing,
+      pass.ats.matched,
+      pass.ats.score,
+      TAILOR_ATS_TARGET,
+    );
+    log.info('tailor ats below target; retrying', {
+      retry,
+      score: pass.ats.score,
+      target: TAILOR_ATS_TARGET,
+      missing: pass.ats.missing,
+    });
+
+    const refined = await runTailorPass(opts, pass.updated, TAILOR_REFINE_SYSTEM_PROMPT, retryPrompt, totalTokens, log);
+    totalTokens += refined.tokens;
+
+    if (refined.ats.score <= pass.ats.score) {
+      log.info('tailor ats retry plateaued; accepting previous patch set', {
         retry,
-        score: pass.ats.score,
-        target: TAILOR_ATS_TARGET,
-        missing: pass.ats.missing,
+        prev_score: pass.ats.score,
+        refined_score: refined.ats.score,
       });
-      const refined = await runTailorPass(opts, TAILOR_REFINE_SYSTEM_PROMPT, retryPrompt, totalTokens, log);
-      totalTokens += refined.tokens;
-
-      // Stop if the refinement didn't actually help — the candidate's base
-      // resume simply doesn't support the remaining keywords.
-      if (refined.ats.score <= pass.ats.score) {
-        log.info('tailor ats retry plateaued; accepting previous draft', {
-          retry,
-          prev_score: pass.ats.score,
-          refined_score: refined.ats.score,
-        });
-        break;
-      }
-      pass = refined;
+      break;
     }
+
+    pass = refined;
+    appliedPatches.push(...refined.patches);
   }
 
   log.info('tailor accepted', {
-    mode: userSuppliedDraft ? 'refine' : 'fresh',
+    mode: 'patch',
     tokens: totalTokens,
-    dropped: pass.droppedBullets.length,
-    truncated: pass.truncated,
+    patches: appliedPatches.length,
     ats_score_base: pass.atsBase.score,
     ats_score_tailored: pass.ats.score,
     ats_target: TAILOR_ATS_TARGET,
@@ -106,27 +93,48 @@ export async function tailorResume(opts: TailorOptions): Promise<TailorResult> {
 
   return {
     base: opts.base,
-    tailored: pass.tailored,
-    dropped_bullets: pass.droppedBullets,
+    updated: pass.updated,
+    patches: appliedPatches,
+    must_have_keywords: pass.mustHaveKeywords,
     ats: pass.ats,
     ats_base: pass.atsBase,
     tokens: totalTokens,
     cost_usd: roundCost(costUsd(opts.model ?? 'gpt-5.2', totalTokens)),
-    truncation_warning: pass.truncated,
   };
 }
 
 interface TailorPass {
-  tailored: TailoredResume;
-  droppedBullets: TailorResult['dropped_bullets'];
+  updated: BaseResume;
+  patches: TailorPatch[];
+  mustHaveKeywords: string[];
   ats: KeywordScore;
   atsBase: KeywordScore;
-  truncated: boolean;
   tokens: number;
+}
+
+interface RawTailorPatch {
+  op: TailorPatch['op'];
+  reason: string;
+  old_text: string | null;
+  new_text: string | null;
+  old_skills: string[];
+  new_skills: string[];
+  company: string | null;
+  title: string | null;
+  dates: string | null;
+  project: string | null;
+  bullet_index: number | null;
+  jd_relevance: number | null;
+}
+
+interface RawTailorPatchPlan {
+  patches: RawTailorPatch[];
+  must_have_keywords: string[];
 }
 
 async function runTailorPass(
   opts: TailorOptions,
+  current: BaseResume,
   systemPrompt: string,
   basePrompt: string,
   priorTokens: number,
@@ -141,7 +149,7 @@ async function runTailorPass(
     const userPrompt =
       attempt === 1
         ? basePrompt
-        : `${basePrompt}\n\nYour previous response broke these rules — fix them now:\n${lastViolations.map((v) => `- ${v}`).join('\n')}`;
+        : `${basePrompt}\n\nYour previous response broke these rules. Return a corrected patch JSON only:\n${lastViolations.map((v) => `- ${v}`).join('\n')}`;
 
     const result = await chat(
       [
@@ -153,109 +161,287 @@ async function runTailorPass(
     );
     tokens += result.tokens;
 
-    const raw = JSON.parse(result.text) as TailoredResume;
-    const { tailored, truncatedBullets } = salvageTailored(raw);
-    if (truncatedBullets > 0) {
-      log.info('tailor truncated over-long bullets', { attempt, truncated_bullets: truncatedBullets });
-    }
-    const violations = validateTailored(tailored, opts.base);
-    if (violations.length === 0) {
-      const fit = fitToOnePage(tailored);
-      const ats = scoreKeywords(fit.trimmed.must_have_keywords, fit.trimmed);
-      const atsBase = scoreKeywordsBase(fit.trimmed.must_have_keywords, opts.base);
+    const raw = JSON.parse(result.text) as RawTailorPatchPlan;
+    const plan = normalizePatchPlan(raw);
+    const applied = applyPatchPlan(current, plan);
+    if (applied.violations.length === 0) {
+      const ats = scoreKeywords(plan.must_have_keywords, applied.updated);
+      const atsBase = scoreKeywordsBase(plan.must_have_keywords, opts.base);
       log.debug('tailor pass ok', {
         attempt,
         tokens,
         prior_tokens: priorTokens,
         ats_score: ats.score,
         ats_missing_count: ats.missing.length,
+        patches: applied.patches.length,
       });
       return {
-        tailored: fit.trimmed,
-        droppedBullets: fit.dropped,
+        updated: applied.updated,
+        patches: applied.patches,
+        mustHaveKeywords: plan.must_have_keywords,
         ats,
         atsBase,
-        truncated: fit.truncated,
         tokens,
       };
     }
-    log.warn('tailor response invalid; retrying', { attempt, violations });
-    lastViolations = violations;
+
+    log.warn('tailor response invalid; retrying', { attempt, violations: applied.violations });
+    lastViolations = applied.violations;
   }
 
   throw new TailorValidationError(lastViolations);
 }
 
-function validateTailored(tailored: TailoredResume, base: BaseResume): string[] {
+function normalizePatchPlan(raw: RawTailorPatchPlan): TailorPatchPlan {
+  return {
+    must_have_keywords: dedupeStrings(raw.must_have_keywords ?? []),
+    patches: (raw.patches ?? []).map((patch) => normalizePatch(patch)),
+  };
+}
+
+function normalizePatch(patch: RawTailorPatch): TailorPatch {
+  const reason = String(patch.reason ?? '').trim();
+  if (patch.op === 'replace_summary') {
+    return {
+      op: 'replace_summary',
+      reason,
+      old_text: patch.old_text ?? '',
+      new_text: patch.new_text ?? '',
+    };
+  }
+  if (patch.op === 'set_skills') {
+    return {
+      op: 'set_skills',
+      reason,
+      old_skills: patch.old_skills ?? [],
+      new_skills: patch.new_skills ?? [],
+    };
+  }
+  if (patch.op === 'replace_project_bullet') {
+    return {
+      op: 'replace_project_bullet',
+      reason,
+      project: patch.project ?? '',
+      bullet_index: numericIndex(patch.bullet_index),
+      old_text: patch.old_text ?? '',
+      new_text: patch.new_text ?? '',
+      jd_relevance: numericRelevance(patch.jd_relevance),
+    };
+  }
+  return {
+    op: 'replace_experience_bullet',
+    reason,
+    company: patch.company ?? '',
+    title: patch.title ?? '',
+    dates: patch.dates ?? '',
+    bullet_index: numericIndex(patch.bullet_index),
+    old_text: patch.old_text ?? '',
+    new_text: patch.new_text ?? '',
+    jd_relevance: numericRelevance(patch.jd_relevance),
+  };
+}
+
+function applyPatchPlan(base: BaseResume, plan: TailorPatchPlan): {
+  updated: BaseResume;
+  patches: TailorPatch[];
+  violations: string[];
+} {
+  const updated = cloneResume(base);
+  const applied: TailorPatch[] = [];
   const violations: string[] = [];
-  if (tailored.skills.length > TAILOR_MAX_SKILLS) {
-    violations.push(`skills count ${tailored.skills.length} exceeds cap ${TAILOR_MAX_SKILLS}`);
+
+  for (const patch of plan.patches) {
+    const before = violations.length;
+    applyPatch(updated, patch, violations);
+    if (violations.length === before) applied.push(patch);
   }
 
-  const baseCompanies = new Set(base.experience.map((j) => j.company.toLowerCase()));
-  for (const job of tailored.experience) {
-    if (!baseCompanies.has(job.company.toLowerCase())) {
-      violations.push(`fabricated experience at "${job.company}" (not in base resume)`);
-    }
-    if (job.bullets.length > TAILOR_MAX_BULLETS_PER_JOB) {
-      violations.push(`"${job.company}" has ${job.bullets.length} bullets (cap ${TAILOR_MAX_BULLETS_PER_JOB})`);
-    }
-    for (const bullet of job.bullets) {
-      if (bullet.text.length > TAILOR_MAX_BULLET_CHARS) {
-        violations.push(`bullet exceeds ${TAILOR_MAX_BULLET_CHARS} chars: "${bullet.text.slice(0, 40)}…"`);
-      }
-      if (isContinuationFragment(bullet.text)) {
-        violations.push(`"${job.company}" bullet starts with a continuation fragment ("…and", "...", "and "): "${bullet.text.slice(0, 40)}"`);
-      }
-    }
+  validateUpdatedResume(updated, base, violations);
+  return { updated, patches: applied, violations };
+}
+
+function applyPatch(resume: BaseResume, patch: TailorPatch, violations: string[]): void {
+  if (!patch.reason.trim()) {
+    violations.push(`${patch.op} missing reason`);
   }
 
-  const baseProjects = new Set(base.projects.map((p) => p.name.toLowerCase()));
-  for (const proj of tailored.projects) {
-    if (!baseProjects.has(proj.name.toLowerCase())) {
-      violations.push(`fabricated project "${proj.name}" (not in base resume)`);
+  if (patch.op === 'replace_summary') {
+    if (resume.summary !== patch.old_text) {
+      violations.push('replace_summary old_text does not match current summary');
+      return;
     }
-    if (proj.bullets.length > TAILOR_MAX_BULLETS_PER_PROJECT) {
-      violations.push(`"${proj.name}" has ${proj.bullets.length} bullets (cap ${TAILOR_MAX_BULLETS_PER_PROJECT})`);
-    }
-    for (const bullet of proj.bullets) {
-      if (bullet.text.length > TAILOR_MAX_BULLET_CHARS) {
-        violations.push(`project bullet exceeds ${TAILOR_MAX_BULLET_CHARS} chars: "${bullet.text.slice(0, 40)}…"`);
-      }
-      if (isContinuationFragment(bullet.text)) {
-        violations.push(`"${proj.name}" bullet starts with a continuation fragment: "${bullet.text.slice(0, 40)}"`);
-      }
-    }
+    resume.summary = patch.new_text.trim();
+    return;
   }
 
-  return violations;
+  if (patch.op === 'set_skills') {
+    if (!sameStringList(resume.skills, patch.old_skills)) {
+      violations.push('set_skills old_skills does not match current skills');
+      return;
+    }
+    resume.skills = dedupeStrings(patch.new_skills.map((skill) => skill.trim()).filter(Boolean));
+    return;
+  }
+
+  if (patch.op === 'replace_experience_bullet') {
+    const job = resume.experience.find(
+      (item) => item.company === patch.company && item.title === patch.title && item.dates === patch.dates,
+    );
+    if (!job) {
+      violations.push(`replace_experience_bullet target not found: ${patch.company} / ${patch.title} / ${patch.dates}`);
+      return;
+    }
+    replaceBullet(job.bullets, patch.bullet_index, patch.old_text, patch.new_text, patch.op, violations);
+    return;
+  }
+
+  const project = resume.projects.find((item) => item.name === patch.project);
+  if (!project) {
+    violations.push(`replace_project_bullet target not found: ${patch.project}`);
+    return;
+  }
+  replaceBullet(project.bullets, patch.bullet_index, patch.old_text, patch.new_text, patch.op, violations);
+}
+
+function replaceBullet(
+  bullets: string[],
+  index: number,
+  oldText: string,
+  newText: string,
+  op: TailorPatch['op'],
+  violations: string[],
+): void {
+  if (!Number.isInteger(index) || index < 0 || index >= bullets.length) {
+    violations.push(`${op} bullet_index ${index} is out of range`);
+    return;
+  }
+  if (bullets[index] !== oldText) {
+    violations.push(`${op} old_text does not match bullet ${index}`);
+    return;
+  }
+  bullets[index] = newText.trim();
+}
+
+function validateUpdatedResume(updated: BaseResume, base: BaseResume, violations: string[]): void {
+  if (updated.skills.length > TAILOR_MAX_SKILLS) {
+    violations.push(`skills count ${updated.skills.length} exceeds cap ${TAILOR_MAX_SKILLS}`);
+  }
+
+  for (const [index, job] of updated.experience.entries()) {
+    const baseJob = base.experience[index];
+    if (!baseJob || job.company !== baseJob.company || job.title !== baseJob.title || job.dates !== baseJob.dates || job.location !== baseJob.location) {
+      violations.push(`locked experience fields changed at index ${index}`);
+      continue;
+    }
+    if (job.bullets.length !== baseJob.bullets.length) {
+      violations.push(`experience bullet count changed for "${job.company}"`);
+    }
+    for (const bullet of job.bullets) validateBulletText(bullet, `"${job.company}" bullet`, violations);
+  }
+
+  for (const [index, project] of updated.projects.entries()) {
+    const baseProject = base.projects[index];
+    if (!baseProject || project.name !== baseProject.name || project.link !== baseProject.link) {
+      violations.push(`locked project fields changed at index ${index}`);
+      continue;
+    }
+    if (project.bullets.length !== baseProject.bullets.length) {
+      violations.push(`project bullet count changed for "${project.name}"`);
+    }
+    for (const bullet of project.bullets) validateBulletText(bullet, `"${project.name}" project bullet`, violations);
+  }
+
+  if (JSON.stringify(updated.contact) !== JSON.stringify(base.contact)) {
+    violations.push('contact block changed');
+  }
+  if (JSON.stringify(updated.education) !== JSON.stringify(base.education)) {
+    violations.push('education changed');
+  }
+  if (updated.source_pdf_name !== base.source_pdf_name || updated.parsed_at !== base.parsed_at) {
+    violations.push('resume source metadata changed');
+  }
+
+  const allowedEducationClaims = educationClaims(base.education.map((edu) => `${edu.degree} ${edu.school} ${edu.details ?? ''}`).join(' '));
+  const visibleClaims = [
+    updated.summary,
+    ...updated.skills,
+    ...updated.experience.flatMap((job) => job.bullets),
+    ...updated.projects.flatMap((project) => project.bullets),
+  ].flatMap((text) => Array.from(educationClaims(text)));
+  for (const claim of visibleClaims) {
+    if (!allowedEducationClaims.has(claim)) {
+      violations.push(`fabricated education credential "${claim}" appears outside base education`);
+    }
+  }
+}
+
+function validateBulletText(text: string, label: string, violations: string[]): void {
+  if (text.length === 0) {
+    violations.push(`${label} is empty`);
+  }
+  if (text.length > TAILOR_MAX_BULLET_CHARS) {
+    violations.push(`${label} exceeds ${TAILOR_MAX_BULLET_CHARS} chars: "${text.slice(0, 40)}"`);
+  }
+  if (isContinuationFragment(text)) {
+    violations.push(`${label} starts with a continuation fragment: "${text.slice(0, 40)}"`);
+  }
+}
+
+function sameStringList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((item, index) => item === b[index]);
+}
+
+function dedupeStrings(items: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of items) {
+    const trimmed = item.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
+function numericIndex(value: number | null): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : -1;
+}
+
+function numericRelevance(value: number | null): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function cloneResume(resume: BaseResume): BaseResume {
+  return JSON.parse(JSON.stringify(resume)) as BaseResume;
+}
+
+const EDUCATION_CREDENTIAL_PATTERNS: Array<[string, RegExp]> = [
+  ['MCA', /\bMCA\b/gi],
+  ['BCA', /\bBCA\b/gi],
+  ['B.E.', /\bB\.?\s*E\.?\b/g],
+  ['B.Tech', /\bB\.?\s*Tech\b/gi],
+  ['BTECH', /\bBTECH\b/gi],
+  ['M.Tech', /\bM\.?\s*Tech\b/gi],
+  ['MTECH', /\bMTECH\b/gi],
+  ['Bachelor of Engineering', /\bBachelor of Engineering\b/gi],
+  ['Master of Engineering', /\bMaster of Engineering\b/gi],
+  ['Bachelor of Technology', /\bBachelor of Technology\b/gi],
+  ['Master of Technology', /\bMaster of Technology\b/gi],
+];
+
+function educationClaims(text: string): Set<string> {
+  const claims = new Set<string>();
+  for (const [claim, pattern] of EDUCATION_CREDENTIAL_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (pattern.test(text)) claims.add(claim);
+  }
+  return claims;
 }
 
 function isContinuationFragment(text: string): boolean {
   return /^\s*(?:…|\.{3}|and\s|or\s|but\s)/i.test(text);
-}
-
-interface SalvageResult {
-  tailored: TailoredResume;
-  truncatedBullets: number;
-}
-
-function salvageTailored(tailored: TailoredResume): SalvageResult {
-  let truncatedBullets = 0;
-  const fixBullet = <T extends { text: string }>(b: T): T => {
-    if (b.text.length <= TAILOR_MAX_BULLET_CHARS) return b;
-    truncatedBullets++;
-    const slice = b.text.slice(0, TAILOR_MAX_BULLET_CHARS);
-    const lastSpace = slice.lastIndexOf(' ');
-    const cut = lastSpace > 0 ? slice.slice(0, lastSpace) : slice;
-    return { ...b, text: cut.replace(/[\s,;:\-–—]+$/, '') };
-  };
-  const salvaged: TailoredResume = {
-    ...tailored,
-    experience: tailored.experience.map((j) => ({ ...j, bullets: j.bullets.map(fixBullet) })),
-    projects: tailored.projects.map((p) => ({ ...p, bullets: p.bullets.map(fixBullet) })),
-  };
-  return { tailored: salvaged, truncatedBullets };
 }
 
 function roundCost(usd: number): number {

@@ -12,11 +12,6 @@
   const jdInput = $('tailor-jd');
   const runButton = $('btn-tailor-run');
   const runStatus = $('tailor-run-status');
-  const previewFrame = $('tailor-preview');
-  const previewStatus = $('tailor-preview-status');
-  const droppedBox = $('tailor-dropped');
-  const droppedList = $('tailor-dropped-list');
-  const truncationWarning = $('tailor-truncation-warning');
   const tailorCostLabel = $('tailor-cost');
   const diffPanel = $('tailor-diff');
   const atsBox = $('tailor-ats');
@@ -44,9 +39,7 @@
   const skillInput = $('tailor-skill-input');
 
   let resume = null;
-  let tailored = null;
-  let lastPdfUrl = null;
-  let renderTimer = null;
+  let lastBaseForUndo = null;
 
   // ----- fetch + render -----
 
@@ -422,7 +415,7 @@
     return row;
   }
 
-  // ----- tailor: paste JD, render PDF -----
+  // ----- tailor: paste JD, update stored resume -----
 
   runButton.addEventListener('click', () => runTailor());
 
@@ -440,17 +433,16 @@
       if (!res.ok) {
         const msg = body.error || `tailor failed (${res.status})`;
         runStatus.textContent = msg;
-        previewStatus.textContent = msg;
         return;
       }
-      tailored = body.tailored;
+      lastBaseForUndo = body.base || null;
+      resume = body.updated || resume;
       runStatus.textContent = '';
       paintTailored(body);
-      schedulePreview();
+      paintEditor();
     } catch (err) {
       const msg = `tailor failed: ${err.message}`;
       runStatus.textContent = msg;
-      previewStatus.textContent = msg;
     } finally {
       setTailorBusy(false);
     }
@@ -461,38 +453,41 @@
     runButton.setAttribute('aria-busy', String(isBusy));
     runButton.textContent = isBusy ? 'Tailoring...' : 'Tailor';
     if (isBusy) {
-      runStatus.textContent = 'tailoring resume against the job description...';
-      previewStatus.textContent = 'tailoring...';
+      runStatus.textContent = 'tailoring and updating stored resume...';
     }
   }
 
-  $('btn-tailor-discard').addEventListener('click', () => {
-    tailored = null;
-    resultPanel.classList.add('hidden');
-    if (lastPdfUrl) { URL.revokeObjectURL(lastPdfUrl); lastPdfUrl = null; }
-    previewFrame.src = 'about:blank';
+  $('btn-tailor-undo').addEventListener('click', async () => {
+    if (!lastBaseForUndo) return;
+    runStatus.textContent = 'undoing changes...';
+    try {
+      const res = await fetch('/api/resume', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(lastBaseForUndo),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        runStatus.textContent = body.error || `undo failed (${res.status})`;
+        return;
+      }
+      resume = lastBaseForUndo;
+      lastBaseForUndo = null;
+      paintEditor();
+      resultPanel.classList.add('hidden');
+      runStatus.textContent = 'changes undone';
+      setTimeout(() => { if (runStatus.textContent === 'changes undone') runStatus.textContent = ''; }, 1600);
+    } catch (err) {
+      runStatus.textContent = `undo failed: ${err.message}`;
+    }
   });
-
-  $('btn-tailor-download').addEventListener('click', async () => {
-    if (!lastPdfUrl) return;
-    const a = document.createElement('a');
-    a.href = lastPdfUrl;
-    a.download = downloadFilename();
-    a.click();
-  });
-
-  function downloadFilename() {
-    const name = (tailored?.contact?.name || 'resume').replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-    return `${name}_tailored.pdf`;
-  }
 
   function paintTailored(result) {
     resultPanel.classList.remove('hidden');
-    tailorCostLabel.textContent = `${result.tokens} tokens · $${(result.cost_usd || 0).toFixed(4)}`;
-    truncationWarning.classList.toggle('hidden', !result.truncation_warning);
-    paintDropped(result.dropped_bullets || []);
+    const patchCount = result.patches?.length || 0;
+    tailorCostLabel.textContent = `${patchCount} patches · ${result.tokens} tokens · $${(result.cost_usd || 0).toFixed(4)}`;
     paintAts(result.ats, result.ats_base);
-    paintDiff(result.base, result.tailored);
+    paintDiff(result.base, result.updated, result.patches || []);
   }
 
   function paintAts(ats, atsBase) {
@@ -536,42 +531,32 @@
     }
   }
 
-  function paintDropped(dropped) {
-    if (dropped.length === 0) { droppedBox.classList.add('hidden'); return; }
-    droppedBox.classList.remove('hidden');
-    droppedList.innerHTML = '';
-    for (const d of dropped) {
-      const li = el('li', '');
-      li.textContent = `${d.section}[${d.section_index}]: ${d.bullet_text}`;
-      droppedList.appendChild(li);
-    }
-  }
+  // ----- diff view: base vs updated -----
 
-  // ----- diff view: base vs tailored -----
-
-  function paintDiff(base, tailored) {
+  function paintDiff(base, updated, patches) {
     diffPanel.innerHTML = '';
-    if (!base || !tailored) return;
+    if (!base || !updated) return;
 
-    diffPanel.appendChild(diffSummary(base.summary, tailored.summary));
+    diffPanel.appendChild(diffPatchSummary(patches || []));
+    diffPanel.appendChild(diffSummary(base.summary, updated.summary));
 
     const baseExpByCo = mapByCompany(base.experience);
-    diffPanel.appendChild(diffSection('Experience', tailored.experience.map((j) => ({
+    diffPanel.appendChild(diffSection('Experience', updated.experience.map((j) => ({
       heading: `${j.title} · ${j.company}`,
       meta: j.dates,
       baseBullets: (baseExpByCo.get(j.company.toLowerCase()) || []).map((b) => normalizeBullet(b)),
-      tailoredBullets: j.bullets.map((b) => normalizeBullet(b.text)),
+      tailoredBullets: j.bullets.map((b) => normalizeBullet(b)),
     }))));
 
     const baseProjByName = mapByName(base.projects);
-    diffPanel.appendChild(diffSection('Projects', tailored.projects.map((p) => ({
+    diffPanel.appendChild(diffSection('Projects', updated.projects.map((p) => ({
       heading: p.name,
       meta: null,
       baseBullets: (baseProjByName.get(p.name.toLowerCase()) || []).map((b) => normalizeBullet(b)),
-      tailoredBullets: p.bullets.map((b) => normalizeBullet(b.text)),
+      tailoredBullets: p.bullets.map((b) => normalizeBullet(b)),
     }))));
 
-    diffPanel.appendChild(diffSkills(base.skills || [], tailored.skills || []));
+    diffPanel.appendChild(diffSkills(base.skills || [], updated.skills || []));
   }
 
   function mapByCompany(experience) {
@@ -588,6 +573,38 @@
 
   function normalizeBullet(s) {
     return String(s || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function diffPatchSummary(patches) {
+    const card = el('div', 'surface rounded-xl px-6 py-5 space-y-3');
+    card.appendChild(diffHeader('Applied patches', `${patches.length} total`));
+    if (patches.length === 0) {
+      const empty = el('div', 'text-[12.5px] text-ink-500');
+      empty.textContent = 'No text changes were needed.';
+      card.appendChild(empty);
+      return card;
+    }
+    const list = el('div', 'grid grid-cols-1 md:grid-cols-2 gap-2');
+    for (const patch of patches) {
+      const row = el('div', 'rounded-md border border-ink-200/60 bg-ink-200/15 px-3 py-2');
+      const title = el('div', 'text-xs font-semibold text-ink-800');
+      title.textContent = patchLabel(patch);
+      const reason = el('div', 'text-[11px] text-ink-500 mt-0.5');
+      reason.textContent = patch.reason || 'Updated for JD alignment';
+      row.appendChild(title);
+      row.appendChild(reason);
+      list.appendChild(row);
+    }
+    card.appendChild(list);
+    return card;
+  }
+
+  function patchLabel(patch) {
+    if (patch.op === 'replace_summary') return 'Summary rewritten';
+    if (patch.op === 'set_skills') return 'Skills updated';
+    if (patch.op === 'replace_project_bullet') return `${patch.project} bullet ${patch.bullet_index + 1}`;
+    if (patch.op === 'replace_experience_bullet') return `${patch.company} bullet ${patch.bullet_index + 1}`;
+    return 'Resume text updated';
   }
 
   function diffSummary(baseText, tailoredText) {
@@ -714,28 +731,4 @@
     return col;
   }
 
-  function schedulePreview() {
-    previewStatus.textContent = 'rendering…';
-    if (renderTimer) clearTimeout(renderTimer);
-    renderTimer = setTimeout(renderPreview, 350);
-  }
-
-  async function renderPreview() {
-    if (!tailored) return;
-    try {
-      const res = await fetch('/api/resume/render', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(tailored),
-      });
-      if (!res.ok) { previewStatus.textContent = `render failed (${res.status})`; return; }
-      const blob = await res.blob();
-      if (lastPdfUrl) URL.revokeObjectURL(lastPdfUrl);
-      lastPdfUrl = URL.createObjectURL(blob);
-      previewFrame.src = lastPdfUrl;
-      previewStatus.textContent = '';
-    } catch (err) {
-      previewStatus.textContent = `render failed: ${err.message}`;
-    }
-  }
 })();

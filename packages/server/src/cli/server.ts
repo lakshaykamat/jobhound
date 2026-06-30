@@ -8,14 +8,13 @@ import { DEFAULT_HTTP_PORT, RESUME_PDF_MAX_BYTES, SHUTDOWN_SIGNALS } from '../co
 import { JobsStore } from '../adapters/jobs-store';
 import { ResumeStore } from '../adapters/resume-store';
 import { ResumeParseError, parseResumePdf } from '../adapters/resume-parser';
-import { renderResume } from '../adapters/resume-pdf';
 import { deriveProfileFromResume } from '../core/profile-from-resume';
 import { TailorValidationError, tailorResume } from '../core/tailor';
 import { EventBus, ServerEvent } from '../core/event-bus';
 import { ObservableTracker } from '../core/observable-tracker';
 import { ServerController } from '../core/server-state';
 import { logger } from '../logger';
-import { BaseResume, TailoredResume } from '../types';
+import { BaseResume } from '../types';
 import { validateStartup } from './startup';
 
 const DEFAULT_DATA_DIR = './.data';
@@ -188,18 +187,6 @@ async function handleRequest(
   if (method === 'POST' && pathname === '/api/resume/upload') {
     return handleResumeUpload(req, res, controller, resumeStore, url);
   }
-  if (method === 'POST' && pathname === '/api/resume/render') {
-    const body = await readJsonBody<TailoredResume>(req);
-    if (!body) return json(res, 400, { error: 'invalid JSON body' });
-    const pdf = await renderResume(body);
-    res.writeHead(200, {
-      'content-type': 'application/pdf',
-      'content-length': String(pdf.length),
-      'cache-control': 'no-store',
-    });
-    res.end(pdf);
-    return;
-  }
   if (method === 'POST' && pathname === '/api/tailor') {
     return handleTailor(req, res, controller, resumeStore);
   }
@@ -214,7 +201,7 @@ async function handleTailor(
   controller: ServerController,
   resumeStore: ResumeStore,
 ): Promise<void> {
-  const body = await readJsonBody<{ jd?: unknown; draft?: TailoredResume }>(req);
+  const body = await readJsonBody<{ jd?: unknown }>(req);
   const jd = typeof body?.jd === 'string' ? body.jd : '';
   if (jd.trim().length === 0) return json(res, 400, { error: 'jd is required' });
 
@@ -230,9 +217,9 @@ async function handleTailor(
       jd,
       apiKey: cfg.secrets.openai_key,
       model: cfg.openai.model,
-      draft: body?.draft,
-      log: logger.child({ feature: 'tailor', mode: body?.draft ? 'refine' : 'fresh' }),
+      log: logger.child({ feature: 'tailor', mode: 'patch' }),
     });
+    await resumeStore.write(result.updated);
     return json(res, 200, result);
   } catch (err) {
     if (err instanceof TailorValidationError) {

@@ -1,13 +1,14 @@
 import { BaseResume, KeywordScore, TailoredResume } from '../types';
 
-export function scoreKeywords(keywords: string[], tailored: TailoredResume): KeywordScore {
-  const haystack = flattenResumeText(tailored).toLowerCase();
+type ResumeForKeywordScore = BaseResume | TailoredResume;
+
+export function scoreKeywords(keywords: string[], resume: ResumeForKeywordScore): KeywordScore {
+  const haystack = flattenResumeText(resume).toLowerCase();
   return scoreAgainstText(keywords, haystack);
 }
 
 export function scoreKeywordsBase(keywords: string[], base: BaseResume): KeywordScore {
-  const haystack = flattenBaseResumeText(base).toLowerCase();
-  return scoreAgainstText(keywords, haystack);
+  return scoreKeywords(keywords, base);
 }
 
 function scoreAgainstText(keywords: string[], haystack: string): KeywordScore {
@@ -18,6 +19,7 @@ function scoreAgainstText(keywords: string[], haystack: string): KeywordScore {
   for (const raw of keywords) {
     const keyword = raw.trim();
     if (keyword.length === 0) continue;
+    if (isInvalidKeywordNote(keyword)) continue;
     if (matchesKeyword(keyword, haystack, stems)) matched.push(raw);
     else missing.push(raw);
   }
@@ -27,58 +29,35 @@ function scoreAgainstText(keywords: string[], haystack: string): KeywordScore {
   return { matched, missing, score };
 }
 
-function flattenResumeText(tailored: TailoredResume): string {
+function flattenResumeText(resume: ResumeForKeywordScore): string {
   const parts: string[] = [];
   const push = (s: string | null | undefined) => { if (s && s.length > 0) parts.push(s); };
 
-  push(tailored.contact.name);
-  push(tailored.contact.email);
-  push(tailored.contact.phone);
-  push(tailored.contact.location);
-  for (const link of tailored.contact.links) { push(link.label); push(link.url); }
-  push(tailored.summary);
-  for (const job of tailored.experience) {
+  push(resume.contact.name);
+  push(resume.contact.email);
+  push(resume.contact.phone);
+  push(resume.contact.location);
+  for (const link of resume.contact.links) { push(link.label); push(link.url); }
+  push(resume.summary);
+  for (const job of resume.experience) {
     push(job.company); push(job.title); push(job.dates); push(job.location);
-    for (const b of job.bullets) push(b.text);
+    for (const b of job.bullets) push(typeof b === 'string' ? b : b.text);
   }
-  for (const proj of tailored.projects) {
+  for (const proj of resume.projects) {
     push(proj.name); push(proj.link);
-    for (const b of proj.bullets) push(b.text);
+    for (const b of proj.bullets) push(typeof b === 'string' ? b : b.text);
   }
-  for (const skill of tailored.skills) push(skill);
-  for (const edu of tailored.education) {
-    push(edu.school); push(edu.degree); push(edu.dates); push(edu.details);
-  }
-  return parts.join(' ');
-}
-
-function flattenBaseResumeText(base: BaseResume): string {
-  const parts: string[] = [];
-  const push = (s: string | null | undefined) => { if (s && s.length > 0) parts.push(s); };
-
-  push(base.contact.name);
-  push(base.contact.email);
-  push(base.contact.phone);
-  push(base.contact.location);
-  for (const link of base.contact.links) { push(link.label); push(link.url); }
-  push(base.summary);
-  for (const job of base.experience) {
-    push(job.company); push(job.title); push(job.dates); push(job.location);
-    for (const b of job.bullets) push(b);
-  }
-  for (const proj of base.projects) {
-    push(proj.name); push(proj.link);
-    for (const b of proj.bullets) push(b);
-  }
-  for (const skill of base.skills) push(skill);
-  for (const edu of base.education) {
+  for (const skill of resume.skills) push(skill);
+  for (const edu of resume.education) {
     push(edu.school); push(edu.degree); push(edu.dates); push(edu.details);
   }
   return parts.join(' ');
 }
 
 function matchesKeyword(keyword: string, haystack: string, stems: Set<string>): boolean {
-  if (matchesSingleOrPhrase(keyword, haystack, stems)) return true;
+  for (const variant of keywordVariants(keyword)) {
+    if (matchesSingleOrPhrase(variant, haystack, stems)) return true;
+  }
 
   // Safety net for compound JD phrases the LLM didn't split into atomic terms
   // (e.g. "MySQL/PostgreSQL", "NGINX Basics", "Strong DSA Knowledge"). Split
@@ -94,7 +73,16 @@ function matchesKeyword(keyword: string, haystack: string, stems: Set<string>): 
 function matchesSingleOrPhrase(keyword: string, haystack: string, stems: Set<string>): boolean {
   const lower = keyword.toLowerCase().trim();
   if (lower.length === 0) return false;
-  if (/\s/.test(lower)) return haystack.includes(lower);
+  if (/\s/.test(lower)) {
+    if (haystack.includes(lower)) return true;
+    const phraseTokens = tokenize(lower).filter((t) => !FILLER_TOKENS.has(t));
+    return phraseTokens.length > 0 && phraseTokens.every((token) => {
+      for (const variant of stemVariants(token)) {
+        if (stems.has(variant)) return true;
+      }
+      return false;
+    });
+  }
   for (const variant of stemVariants(lower)) {
     if (stems.has(variant)) return true;
   }
@@ -105,8 +93,30 @@ const FILLER_TOKENS = new Set([
   'basics', 'basic', 'fundamentals', 'fundamental', 'knowledge',
   'experience', 'strong', 'working', 'proficient', 'familiar',
   'familiarity', 'hands-on', 'expert', 'expertise', 'understanding',
-  'with', 'in', 'of', 'the', 'a', 'an',
+  'with', 'in', 'of', 'the', 'a', 'an', 'needed', 'required',
 ]);
+
+function isInvalidKeywordNote(keyword: string): boolean {
+  return /\bnot\s+(?:in|from|part\s+of)\s+(?:the\s+)?jd\b/i.test(keyword)
+    || /\bnot\s+required\b/i.test(keyword)
+    || /\bnot\s+(?:a\s+)?(?:must|requirement)\b/i.test(keyword);
+}
+
+function keywordVariants(keyword: string): string[] {
+  const variants = new Set<string>();
+  variants.add(keyword);
+
+  const withoutParens = keyword.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  if (withoutParens.length > 0) variants.add(withoutParens);
+
+  const parenMatches = keyword.matchAll(/\(([^)]*)\)/g);
+  for (const match of parenMatches) {
+    const content = match[1]?.trim();
+    if (content && !isInvalidKeywordNote(content)) variants.add(content);
+  }
+
+  return [...variants];
+}
 
 function splitAtomic(keyword: string): string[] {
   return keyword
@@ -129,7 +139,11 @@ function collectStems(haystack: string): Set<string> {
 }
 
 function tokenize(text: string): string[] {
-  return text.toLowerCase().split(/[^a-z0-9.+#-]+/).filter((t) => t.length > 0);
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9.+#-]+/)
+    .map((t) => t.replace(/[.,;:!?]+$/g, ''))
+    .filter((t) => t.length > 0);
 }
 
 function stemVariants(word: string): string[] {
