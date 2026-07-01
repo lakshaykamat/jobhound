@@ -6,7 +6,6 @@
   "scripts": {
     "build": "pnpm --filter @jobhound/server run build",
     "start": "pnpm --filter @jobhound/server run start",
-    "verify-sheet": "pnpm --filter @jobhound/server run verify-sheet",
     "typecheck": "pnpm --filter @jobhound/server run typecheck",
     "test": "pnpm --filter @jobhound/server run test",
     "test:coverage": "pnpm --filter @jobhound/server run test:coverage",

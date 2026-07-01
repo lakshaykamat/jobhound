@@ -14,16 +14,11 @@
     "http_port": 8787
   },
   "serpapi": {
-    "country": "in",
+    "country": "us",
     "language": "en",
     "platforms": [
       "linkedin",
       "wellfound",
-      "instahyre",
-      "naukri",
-      "cutshort",
-      "uplers",
-      "hirect",
       "lever",
       "greenhouse",
       "ashby"
@@ -33,18 +28,12 @@
     "model": "gpt-5.2",
     "llm_concurrency": 4
   },
-  "scoring": {
-    "axis_weights": {
-      "skills_match": 30,
-      "seniority_match": 15,
-      "location_match": 15,
-      "comp_match": 10,
-      "domain_match": 15,
-      "recency": 15
-    },
-    "dealbreaker_score_cap": 40,
-    "recency_full_days": 7,
-    "recency_decay_days": 60
+  "features": {
+    "tailor_resume": true
+  },
+  "secrets": {
+    "serpapi_keys": ["<your-serpapi-key>"],
+    "openai_key": "<your-openai-key>"
   },
   "profile": {
     "skills": ["<lowercase canonical tech token>", "..."],

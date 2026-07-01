@@ -98,8 +98,6 @@ Everything else has defaults that work:
 
 | Var | What |
 |---|---|
-| `SERPAPI_KEY` | From [serpapi.com](https://serpapi.com). Free tier is 100/mo. |
-| `OPENAI_KEY` | Model id in `packages/server/src/constants.ts`, prices in `packages/server/src/pricing.ts`. |
 | `DATA_DIR` | Where `.data/` lives. Defaults to `./.data` (cwd-relative) locally, `/app/.data` in Docker. |
 | `PORT` | Override the dashboard port (default `8787`). |
 | `LOG_LEVEL` / `LOG_FORMAT` | Logger knobs. Defaults are sensible. |
