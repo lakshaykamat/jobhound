@@ -70,6 +70,7 @@ export interface ConfigOverrides {
   scoring?: Partial<AppConfig['scoring']>;
   profile?: Partial<FitProfile>;
   secrets?: Partial<AppConfig['secrets']>;
+  features?: Partial<AppConfig['features']>;
 }
 
 export function makeConfig(overrides: ConfigOverrides = {}): AppConfig {
@@ -110,6 +111,10 @@ export function makeConfig(overrides: ConfigOverrides = {}): AppConfig {
       serpapi_keys: ['test-serpapi-key'],
       openai_key: 'test-openai-key',
       ...(overrides.secrets ?? {}),
+    },
+    features: {
+      tailor_resume: false,
+      ...(overrides.features ?? {}),
     },
   };
 }

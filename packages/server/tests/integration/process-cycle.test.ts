@@ -99,7 +99,7 @@ describe('processCycle', () => {
     const summary = await processCycle(
       cfg,
       store,
-      { serpapi: 'k', openai: 'k' },
+      { serpapi: ['k'], openai: 'k' },
       tracker,
       'cycle-1',
     );
@@ -148,7 +148,7 @@ describe('processCycle', () => {
     const summary = await processCycle(
       makeConfig(),
       store,
-      { serpapi: 'k', openai: 'k' },
+      { serpapi: ['k'], openai: 'k' },
       tracker,
       'cycle-2',
     );
@@ -176,7 +176,7 @@ describe('processCycle', () => {
     const summary = await processCycle(
       makeConfig({ cycle: { max_job_age_days: 7 } }),
       store,
-      { serpapi: 'k', openai: 'k' },
+      { serpapi: ['k'], openai: 'k' },
       new Tracker(tmp),
       'cycle-3',
     );
@@ -205,7 +205,7 @@ describe('processCycle', () => {
     const summary = await processCycle(
       makeConfig({ openai: { llm_concurrency: 1, model: 'gpt-4o-mini' } }),
       store,
-      { serpapi: 'k', openai: 'k' },
+      { serpapi: ['k'], openai: 'k' },
       new Tracker(tmp),
       'cycle-4',
     );
@@ -228,7 +228,7 @@ describe('processCycle', () => {
     const summary = await processCycle(
       makeConfig(),
       store,
-      { serpapi: 'k', openai: 'k' },
+      { serpapi: ['k'], openai: 'k' },
       new Tracker(tmp),
       'cycle-5',
     );
@@ -263,7 +263,7 @@ describe('processCycle', () => {
     const cfg = makeConfig({ openai: { llm_concurrency: 2, model: 'gpt-4o-mini' } });
     const { store, written } = makeFakeStore([]);
     const promise = processCycle(
-      cfg, store, { serpapi: 'k', openai: 'k' }, new Tracker(tmp), 'cycle-6',
+      cfg, store, { serpapi: ['k'], openai: 'k' }, new Tracker(tmp), 'cycle-6',
     );
     await vi.runAllTimersAsync();
     const summary = await promise;
