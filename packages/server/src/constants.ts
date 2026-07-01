@@ -68,16 +68,43 @@ export const DEFAULT_HTTP_PORT = 8787;
 export const DEFAULT_SERPAPI_COUNTRY = "in";
 export const DEFAULT_SERPAPI_LANGUAGE = "en";
 export const DEFAULT_SERPAPI_PLATFORMS: readonly string[] = [
+  // Indian job boards
   "linkedin",
-  "wellfound",
-  "instahyre",
   "naukri",
+  "instahyre",
   "cutshort",
+  "wellfound",
   "uplers",
   "hirect",
+  "foundit",
+  "shine",
+  "hirist",
+  "iimjobs",
+  "apna",
+  "timesjobs",
+  // Global ATS platforms (substring-matched against `via` field)
   "lever",
   "greenhouse",
   "ashby",
+  "workday",
+  "smartrecruiters",
+  "jobvite",
+  "icims",
+  "workable",
+  "teamtailor",
+  "recruitee",
+  "bamboohr",
+  "breezy",
+  // Remote-focused boards
+  "remoteok",
+  "weworkremotely",
+  "remotive",
+  // General
+  "indeed",
+  "glassdoor",
+  "monster",
+  "dice",
+  "zoho",
 ];
 
 // openai
