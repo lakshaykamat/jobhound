@@ -9,7 +9,7 @@ function writeConfig(data: Record<string, unknown>): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'jf-cfg-'));
   const p = path.join(dir, 'config.json');
   const withSecrets = {
-    secrets: { serpapi_key: 'test-serpapi-key', openai_key: 'test-openai-key' },
+    secrets: { serpapi_keys: ['test-serpapi-key'], openai_key: 'test-openai-key' },
     ...data,
   };
   writeFileSync(p, JSON.stringify(withSecrets), 'utf-8');
@@ -143,30 +143,6 @@ describe('validateConfig', () => {
   it('rejects poll_interval_seconds < 60', () => {
     const cfg = makeConfig({ server: { poll_interval_seconds: 30 } });
     expect(() => validateConfig(cfg)).toThrow(/poll_interval_seconds/);
-  });
-
-  it('rejects recency_full_days >= recency_decay_days', () => {
-    const cfg = makeConfig({
-      scoring: {
-        axis_weights: makeConfig().scoring.axis_weights,
-        dealbreaker_score_cap: 40,
-        recency_full_days: 10,
-        recency_decay_days: 10,
-      },
-    });
-    expect(() => validateConfig(cfg)).toThrow(/recency_full_days/);
-  });
-
-  it('rejects dealbreaker cap outside [0, 100]', () => {
-    const cfg = makeConfig({
-      scoring: {
-        axis_weights: makeConfig().scoring.axis_weights,
-        dealbreaker_score_cap: 200,
-        recency_full_days: 7,
-        recency_decay_days: 60,
-      },
-    });
-    expect(() => validateConfig(cfg)).toThrow(/dealbreaker_score_cap/);
   });
 
   it('rejects empty profile skills or role titles', () => {

@@ -107,7 +107,7 @@ export function makeConfig(overrides: ConfigOverrides = {}): AppConfig {
     },
     profile: makeProfile(overrides.profile),
     secrets: {
-      serpapi_key: 'test-serpapi-key',
+      serpapi_keys: ['test-serpapi-key'],
       openai_key: 'test-openai-key',
       ...(overrides.secrets ?? {}),
     },
