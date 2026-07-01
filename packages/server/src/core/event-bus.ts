@@ -15,6 +15,7 @@ export interface ServerStateSnapshot {
     score_threshold: number;
     dedup_strategy: string;
   } | null;
+  features: { tailor_resume: boolean } | null;
   month_usage: MonthlyUsage | null;
   last_cycle: CycleRecord | null;
 }

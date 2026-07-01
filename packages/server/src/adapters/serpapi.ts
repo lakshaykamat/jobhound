@@ -47,7 +47,7 @@ export interface FindOptions {
 export async function findJobs(
   queries: string[],
   maxPagesPerQuery: number,
-  apiKey: string,
+  apiKeys: string[],
   serpapi: SerpApiConfig,
   options: FindOptions = {},
   log: Logger = rootLogger,
@@ -56,6 +56,7 @@ export async function findJobs(
   let searchesUsed = 0;
   let queriesFailed = 0;
   let quotaExhausted = false;
+  let keyIndex = 0;
 
   for (const query of queries) {
     if (quotaExhausted) break;
@@ -64,28 +65,45 @@ export async function findJobs(
     try {
       for (let page = 1; page <= maxPagesPerQuery; page++) {
         qLog.debug('fetching SerpApi page', { page });
-        const data = await fetchPage(query, apiKey, nextToken, serpapi, qLog);
-        if (data.error) {
-          if (isQuotaExhausted(data.error)) {
-            qLog.error('SerpApi quota exhausted; stopping discovery', {
+
+        // Fetch with the current key; rotate on quota exhaustion.
+        let data: SerpApiResponse;
+        while (true) {
+          data = await fetchPage(query, apiKeys[keyIndex], nextToken, serpapi, qLog);
+          if (data.error && isQuotaExhausted(data.error)) {
+            keyIndex++;
+            if (keyIndex >= apiKeys.length) {
+              qLog.error('all SerpApi keys exhausted; stopping discovery', {
+                page,
+                serpapi_error: data.error,
+              });
+              quotaExhausted = true;
+              break;
+            }
+            qLog.warn('SerpApi key quota exhausted; rotating to next key', {
               page,
-              serpapi_error: data.error,
+              next_key_index: keyIndex,
             });
-            quotaExhausted = true;
-            break;
+            continue;
           }
-          throw new Error(`SerpApi error payload on p${page}: ${data.error}`);
+          break;
+        }
+
+        if (quotaExhausted) break;
+
+        if (data!.error) {
+          throw new Error(`SerpApi error payload on p${page}: ${data!.error}`);
         }
         searchesUsed++;
-        const results = data.jobs_results ?? [];
+        const results = data!.jobs_results ?? [];
         for (const j of results) all.push(toRawPosting(j));
         qLog.info('SerpApi page fetched', {
           page,
           results: results.length,
-          has_next_page: Boolean(data.serpapi_pagination?.next_page_token),
+          has_next_page: Boolean(data!.serpapi_pagination?.next_page_token),
         });
 
-        nextToken = data.serpapi_pagination?.next_page_token;
+        nextToken = data!.serpapi_pagination?.next_page_token;
         if (!nextToken) break;
       }
     } catch (err) {

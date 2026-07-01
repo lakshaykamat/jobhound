@@ -56,8 +56,12 @@ export interface ScoringConfig {
 }
 
 export interface SecretsConfig {
-  serpapi_key: string;
+  serpapi_keys: string[];
   openai_key: string;
+}
+
+export interface FeaturesConfig {
+  tailor_resume: boolean;
 }
 
 export interface AppConfig {
@@ -68,6 +72,7 @@ export interface AppConfig {
   scoring: ScoringConfig;
   profile: FitProfile;
   secrets: SecretsConfig;
+  features: FeaturesConfig;
 }
 
 export interface ConfigFile {
@@ -78,6 +83,7 @@ export interface ConfigFile {
   scoring?: Partial<ScoringConfig>;
   profile?: Record<string, unknown>;
   secrets?: Partial<SecretsConfig>;
+  features?: Partial<FeaturesConfig>;
 }
 
 export function loadConfig(filePath: string): AppConfig {
@@ -148,8 +154,11 @@ export function buildConfig(raw: ConfigFile): AppConfig {
     },
     profile: normalizeProfile(raw.profile!),
     secrets: {
-      serpapi_key: (raw.secrets?.serpapi_key ?? process.env.SERPAPI_KEY ?? '').trim(),
-      openai_key: (raw.secrets?.openai_key ?? process.env.OPENAI_KEY ?? '').trim(),
+      serpapi_keys: (raw.secrets?.serpapi_keys ?? []).map((k) => String(k).trim()).filter(Boolean),
+      openai_key: (raw.secrets?.openai_key ?? '').trim(),
+    },
+    features: {
+      tailor_resume: raw.features?.tailor_resume ?? true,
     },
   };
 }
@@ -186,16 +195,9 @@ export function validateConfig(cfg: AppConfig): void {
   if (!cfg.openai.model) errs.push('openai.model must be a non-empty string');
   if (cfg.openai.llm_concurrency < 1) errs.push('openai.llm_concurrency must be >= 1');
 
-  // scoring
-  if (cfg.scoring.recency_full_days >= cfg.scoring.recency_decay_days) {
-    errs.push('scoring.recency_full_days must be < scoring.recency_decay_days');
-  }
-  if (cfg.scoring.dealbreaker_score_cap < 0 || cfg.scoring.dealbreaker_score_cap > 100) {
-    errs.push('scoring.dealbreaker_score_cap must be in [0, 100]');
-  }
 
   // secrets
-  if (!cfg.secrets.serpapi_key) errs.push('secrets.serpapi_key is required');
+  if (!cfg.secrets.serpapi_keys.length) errs.push('secrets.serpapi_keys must have at least one key');
   if (!cfg.secrets.openai_key) errs.push('secrets.openai_key is required');
 
   // profile sanity

@@ -11,7 +11,7 @@ import { scoreJob } from './score';
 import { Logger, logger as rootLogger } from '../logger';
 
 export interface Secrets {
-  serpapi: string;
+  serpapi: string[];
   openai: string;
 }
 

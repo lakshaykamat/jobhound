@@ -4,7 +4,7 @@ import { promises as fs } from 'fs';
 import { mkdirSync } from 'fs';
 import path from 'path';
 import { AppConfig, buildConfig, ConfigFile, configPathFor, saveConfig, tryLoadConfig } from '../config';
-import { DEFAULT_HTTP_PORT, RESUME_PDF_MAX_BYTES, SHUTDOWN_SIGNALS } from '../constants';
+import { RESUME_PDF_MAX_BYTES, SHUTDOWN_SIGNALS } from '../constants';
 import { JobsStore } from '../adapters/jobs-store';
 import { ResumeStore } from '../adapters/resume-store';
 import { ResumeParseError, parseResumePdf } from '../adapters/resume-parser';
@@ -46,10 +46,6 @@ async function main() {
   const controller = new ServerController({ configPath, store, tracker, bus });
 
   if (once) {
-    if (!config) {
-      logger.error('--once requires a valid config.json; run the server in HTTP mode and complete Setup first');
-      process.exit(1);
-    }
     const result = await controller.runOnce();
     if (!result.ok) {
       logger.error('--once failed to start', { reason: result.reason });
@@ -60,9 +56,7 @@ async function main() {
     return;
   }
 
-  const port = process.env.PORT
-    ? Number(process.env.PORT)
-    : config?.server.http_port ?? DEFAULT_HTTP_PORT;
+  const port = process.env.PORT ? Number(process.env.PORT) : config.server.http_port;
   const httpServer = createServer((req, res) => {
     handleRequest(req, res, controller, bus, dataDir, store, resumeStore, configPath).catch((err) => {
       logger.error('request handler crashed', { err, url: req.url });
@@ -188,6 +182,10 @@ async function handleRequest(
     return handleResumeUpload(req, res, controller, resumeStore, url);
   }
   if (method === 'POST' && pathname === '/api/tailor') {
+    const tailorCfg = controller.loadConfigSafe();
+    if (tailorCfg && !tailorCfg.features.tailor_resume) {
+      return json(res, 403, { error: 'tailor_resume feature is disabled' });
+    }
     return handleTailor(req, res, controller, resumeStore);
   }
 
@@ -233,7 +231,7 @@ interface SetupRequest {
   cycle?: { queries?: string[] };
   serpapi?: { country?: string; language?: string };
   openai?: { model?: string };
-  secrets?: { serpapi_key?: string; openai_key?: string };
+  secrets?: { serpapi_keys?: string[]; openai_key?: string };
   profile?: { seniority?: string | null };
 }
 
@@ -268,7 +266,7 @@ async function handleSetup(
       seniority,
     },
     secrets: {
-      serpapi_key: (body.secrets?.serpapi_key ?? '').trim(),
+      serpapi_keys: (body.secrets?.serpapi_keys ?? []).map((k) => k.trim()).filter(Boolean),
       openai_key: (body.secrets?.openai_key ?? '').trim(),
     },
   };

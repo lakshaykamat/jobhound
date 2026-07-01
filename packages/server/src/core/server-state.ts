@@ -72,6 +72,7 @@ export class ServerController {
             dedup_strategy: cfg.cycle.dedup_strategy,
           }
         : null,
+      features: cfg ? { tailor_resume: cfg.features.tailor_resume } : null,
       month_usage: null, // filled in by HTTP layer (async)
       last_cycle: this.state.lastCycle,
     };
@@ -170,7 +171,7 @@ export class ServerController {
   private async runOneCycle(): Promise<void> {
     const config = loadConfig(this.deps.configPath);
     const secrets: Secrets = {
-      serpapi: config.secrets.serpapi_key,
+      serpapi: config.secrets.serpapi_keys,
       openai: config.secrets.openai_key,
     };
     const usage = await this.deps.tracker.monthlyUsage();
