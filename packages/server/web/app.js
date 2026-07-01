@@ -11,13 +11,11 @@ const els = {
   btnStart: $('btn-start'),
   btnStop: $('btn-stop'),
   btnRunOnce: $('btn-run-once'),
-  sseStatus: $('sse-status'),
-  sseDot: $('sse-dot'),
+
 
   // overview KPIs
   ovSubtitle: $('ov-subtitle'),
   searches: $('m-searches'),
-  searchesBar: $('m-searches-bar'),
   tokens: $('m-tokens'),
   tokensDetail: $('m-tokens-detail'),
   cost: $('m-cost'),
@@ -70,11 +68,18 @@ const els = {
   jobsDateTo: $('jobs-date-to'),
   jobsDateCustomLabel: $('jobs-date-custom-label'),
 
-  // settings
+  // settings — json editor
   settingsEditor: $('settings-editor'),
   settingsStatus: $('settings-status'),
   btnSettingsReload: $('btn-settings-reload'),
   btnSettingsSave: $('btn-settings-save'),
+
+  // settings — api keys panel
+  keysOpenai: $('keys-openai'),
+  keysSerpList: $('keys-serp-list'),
+  keysStatus: $('keys-status'),
+  btnKeysSave: $('btn-keys-save'),
+  btnKeysAddSerp: $('btn-keys-add-serp'),
 
   // setup
   setupForm: $('setup-form'),
@@ -83,8 +88,9 @@ const els = {
   setupResumeFilename: $('setup-resume-filename'),
 };
 
-const ROUTES = ['overview', 'jobs', 'activity', 'cycles', 'tailor', 'resume', 'settings', 'setup'];
+const ROUTES = ['overview', 'jobs', 'jobs/cycles', 'tailor', 'resume', 'settings', 'setup'];
 let isConfigured = false;
+let tailorEnabled = true;
 const MAX_FEED_ITEMS = 300;
 const MAX_JOBS_ROWS = 500;
 
@@ -117,6 +123,7 @@ function currentRoute() {
   const fallback = isConfigured ? 'overview' : 'setup';
   if (!ROUTES.includes(hash)) return fallback;
   if (!isConfigured && hash !== 'setup') return 'setup';
+  if (hash === 'tailor' && !tailorEnabled) return fallback;
   return hash;
 }
 
@@ -124,13 +131,14 @@ function showRoute(route) {
   $$('[data-page]').forEach((sec) => {
     sec.classList.toggle('hidden', sec.dataset.page !== route);
   });
+  const navRoute = route.split('/')[0];
   $$('.nav-item').forEach((el) => {
-    const active = el.dataset.route === route;
+    const active = el.dataset.route === navRoute;
     el.classList.toggle('active', active);
     if (active) el.setAttribute('aria-current', 'page');
     else el.removeAttribute('aria-current');
   });
-  if (route === 'cycles') refreshCycles();
+  if (route === 'jobs/cycles') refreshCycles();
   if (route === 'settings') refreshSettings();
   if (route === 'jobs') refreshJobs();
   if ((route === 'tailor' || route === 'resume') && typeof window.refreshTailor === 'function') window.refreshTailor();
@@ -149,6 +157,20 @@ els.btnClear.addEventListener('click', () => {
 });
 if (els.btnSettingsReload) els.btnSettingsReload.addEventListener('click', () => refreshSettings());
 if (els.btnSettingsSave) els.btnSettingsSave.addEventListener('click', () => saveSettings());
+if (els.btnKeysSave) els.btnKeysSave.addEventListener('click', () => saveKeys());
+if (els.btnKeysAddSerp) els.btnKeysAddSerp.addEventListener('click', () => addSerpKeyRow(''));
+if (els.keysSerpList) {
+  els.keysSerpList.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.key-serp-remove');
+    if (removeBtn) removeSerpKeyRow(removeBtn);
+    const toggleBtn = e.target.closest('.key-toggle');
+    if (toggleBtn) toggleKeyVisibility(toggleBtn);
+  });
+}
+document.addEventListener('click', (e) => {
+  const toggleBtn = e.target.closest('.key-toggle[data-target="keys-openai"]');
+  if (toggleBtn) toggleKeyVisibility(toggleBtn);
+});
 if (els.setupForm) els.setupForm.addEventListener('submit', submitSetup);
 if (els.setupResumeFile && els.setupResumeFilename) {
   els.setupResumeFile.addEventListener('change', () => {
@@ -224,13 +246,19 @@ function applyState(state) {
   // sidebar status pill
   els.statusDot.className = `h-2 w-2 rounded-full ${STATUS_COLORS[status] || STATUS_COLORS.paused}`;
   els.statusLabel.textContent = status;
-  els.statusLabel.className = 'capitalize text-ink-800';
+  els.statusLabel.className = 'capitalize text-ink-800 flex-1 truncate';
   if (status === 'running' && state.current_cycle_id) {
-    els.statusDetail.textContent = shortId(state.current_cycle_id);
-  } else if (status === 'idle' && state.next_cycle_at) {
-    els.statusDetail.textContent = formatRelative(state.next_cycle_at);
+    els.statusDetail.textContent = `Cycle #${shortId(state.current_cycle_id)} in progress`;
+  } else if (status === 'running') {
+    els.statusDetail.textContent = 'Cycle in progress';
+  } else if (status === 'stopping') {
+    els.statusDetail.textContent = 'Finishing current cycle…';
+  } else if (state.next_cycle_at) {
+    els.statusDetail.textContent = `Next run ${formatRelative(state.next_cycle_at)} · ${formatTime(state.next_cycle_at)}`;
+  } else if (status === 'idle') {
+    els.statusDetail.textContent = 'Waiting for next cycle';
   } else {
-    els.statusDetail.textContent = '';
+    els.statusDetail.textContent = 'No schedule active';
   }
 
   // buttons
@@ -269,6 +297,18 @@ function applyState(state) {
     els.cycleMeta.textContent = '';
   }
 
+  if (state.features != null) {
+    const enabled = state.features.tailor_resume !== false;
+    if (enabled !== tailorEnabled) {
+      tailorEnabled = enabled;
+      const tailorNavItem = document.querySelector('[data-route="tailor"]');
+      if (tailorNavItem) tailorNavItem.classList.toggle('hidden', !tailorEnabled);
+      if (!tailorEnabled && currentRoute() === 'tailor') {
+        location.hash = '#/overview';
+      }
+    }
+  }
+
   if (state.month_usage) renderUsage(state.month_usage);
   if (state.last_cycle) renderLastCycle(state.last_cycle);
 }
@@ -282,11 +322,6 @@ function renderUsage(usage) {
     els.tokensDetail.textContent = `${usage.month}`;
     els.costDetail.textContent = `${usage.month} · USD`;
   }
-  const pct = Math.min(100, ((usage.searches ?? 0) / 100) * 100);
-  els.searchesBar.style.width = `${pct}%`;
-  els.searchesBar.className =
-    'h-full transition-all duration-500 ' +
-    (pct >= 90 ? 'bg-ink-900 opacity-60' : pct >= 70 ? 'bg-ink-900 opacity-75' : 'bg-ink-900');
 }
 
 function renderLastCycle(c) {
@@ -419,7 +454,7 @@ function buildSetupPayload(form) {
     },
     openai: { model: String(form.get('model') ?? '').trim() || 'gpt-4o-mini' },
     secrets: {
-      serpapi_key: String(form.get('serpapi_key') ?? '').trim(),
+      serpapi_keys: [String(form.get('serpapi_key') ?? '').trim()].filter(Boolean),
       openai_key: String(form.get('openai_key') ?? '').trim(),
     },
     profile: { seniority: seniority || null },
@@ -439,8 +474,99 @@ async function refreshSettings() {
     const cfg = await res.json();
     els.settingsEditor.value = JSON.stringify(cfg, null, 2);
     els.settingsStatus.textContent = '';
+    populateKeysPanel(cfg);
   } catch (err) {
     els.settingsStatus.textContent = `load failed: ${err.message}`;
+  }
+}
+
+function populateKeysPanel(cfg) {
+  if (!els.keysOpenai || !els.keysSerpList) return;
+  els.keysOpenai.value = cfg.secrets?.openai_key ?? '';
+  els.keysSerpList.innerHTML = '';
+  const keys = cfg.secrets?.serpapi_keys ?? [];
+  const list = keys.length ? keys : [''];
+  for (const k of list) addSerpKeyRow(k);
+}
+
+function addSerpKeyRow(value) {
+  if (!els.keysSerpList) return;
+  const row = document.createElement('div');
+  row.className = 'key-serp-row flex items-center gap-2';
+  row.innerHTML = `
+    <input type="password" autocomplete="off" spellcheck="false"
+      class="key-serp-input flex-1 text-sm font-mono rounded-md px-3 py-1.5" placeholder="sk-…" />
+    <button type="button" class="key-toggle text-xs text-ink-400 hover:text-ink-700 px-2 py-1.5 shrink-0">show</button>
+    <button type="button" class="key-serp-remove text-xs text-ink-400 hover:text-red-500 px-2 py-1.5 shrink-0" title="Remove">✕</button>
+  `;
+  row.querySelector('.key-serp-input').value = value;
+  els.keysSerpList.appendChild(row);
+  updateRemoveButtons();
+}
+
+function removeSerpKeyRow(btn) {
+  btn.closest('.key-serp-row').remove();
+  updateRemoveButtons();
+}
+
+function updateRemoveButtons() {
+  if (!els.keysSerpList) return;
+  const rows = els.keysSerpList.querySelectorAll('.key-serp-row');
+  rows.forEach((r) => {
+    r.querySelector('.key-serp-remove').disabled = rows.length === 1;
+  });
+}
+
+function toggleKeyVisibility(btn) {
+  const targetId = btn.dataset.target;
+  const input = targetId ? document.getElementById(targetId) : btn.closest('.key-serp-row')?.querySelector('.key-serp-input');
+  if (!input) return;
+  const hidden = input.type === 'password';
+  input.type = hidden ? 'text' : 'password';
+  btn.textContent = hidden ? 'hide' : 'show';
+}
+
+async function saveKeys() {
+  if (!els.keysOpenai || !els.keysSerpList) return;
+  const openaiKey = els.keysOpenai.value.trim();
+  const serpKeys = Array.from(els.keysSerpList.querySelectorAll('.key-serp-input'))
+    .map((i) => i.value.trim())
+    .filter(Boolean);
+
+  if (!openaiKey) {
+    els.keysStatus.textContent = 'OpenAI key is required';
+    return;
+  }
+  if (!serpKeys.length) {
+    els.keysStatus.textContent = 'at least one SerpAPI key is required';
+    return;
+  }
+
+  els.keysStatus.textContent = 'saving…';
+  try {
+    const cfgRes = await fetch('/api/config');
+    if (!cfgRes.ok) {
+      els.keysStatus.textContent = 'could not load current config';
+      return;
+    }
+    const cfg = await cfgRes.json();
+    cfg.secrets = { ...cfg.secrets, serpapi_keys: serpKeys, openai_key: openaiKey };
+
+    const saveRes = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(cfg),
+    });
+    const body = await saveRes.json().catch(() => ({}));
+    if (!saveRes.ok) {
+      els.keysStatus.textContent = body.error || `save failed (${saveRes.status})`;
+      return;
+    }
+    els.keysStatus.textContent = 'saved';
+    if (els.settingsEditor) els.settingsEditor.value = JSON.stringify(cfg, null, 2);
+    setTimeout(() => { if (els.keysStatus.textContent === 'saved') els.keysStatus.textContent = ''; }, 1500);
+  } catch (err) {
+    els.keysStatus.textContent = `save failed: ${err.message}`;
   }
 }
 
@@ -532,16 +658,18 @@ function paintJobs() {
 
   const { filtered } = currentJobsView();
   const trimmed = filtered.slice(0, MAX_JOBS_ROWS);
-  els.jobsListMeta.textContent =
+  if (els.jobsListMeta) els.jobsListMeta.textContent =
     `${trimmed.length} shown${filtered.length > trimmed.length ? ` of ${filtered.length}` : ''}`;
 
   if (!trimmed.length) {
     els.jobsList.innerHTML = '';
+    els.jobsList.classList.add('hidden');
     els.jobsEmpty.hidden = false;
     selectedJobId = null;
     paintJobDetail(null);
     return;
   }
+  els.jobsList.classList.remove('hidden');
   els.jobsEmpty.hidden = true;
 
   if (!selectedJobId || !trimmed.find((j) => j.job_id === selectedJobId)) {
@@ -876,16 +1004,8 @@ function pushFeed({ action, title, sub, meta }) {
 
 function connectStream() {
   const src = new EventSource('/api/events');
-  src.addEventListener('open', () => {
-    els.sseStatus.textContent = 'live';
-    els.sseStatus.className = 'text-ink-800';
-    els.sseDot.className = 'h-1.5 w-1.5 rounded-full bg-ink-900';
-  });
-  src.addEventListener('error', () => {
-    els.sseStatus.textContent = 'reconnecting…';
-    els.sseStatus.className = 'text-ink-800';
-    els.sseDot.className = 'h-1.5 w-1.5 rounded-full bg-ink-900 animate-pulse-soft';
-  });
+  src.addEventListener('open', () => {});
+  src.addEventListener('error', () => {});
 
   src.addEventListener('state', (ev) => {
     applyState({ month_usage: null, ...JSON.parse(ev.data) });

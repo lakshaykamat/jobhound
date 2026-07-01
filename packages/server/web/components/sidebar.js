@@ -19,26 +19,18 @@ export function renderSidebar() {
       <nav class="px-3 space-y-0.5" aria-label="Primary">
         ${navItem('overview', 'Overview', '<path d="M3 12L12 4l9 8"/><path d="M5 10v10a1 1 0 001 1h4v-7h4v7h4a1 1 0 001-1V10"/>')}
         ${navItem('jobs', 'Jobs', '<rect x="3" y="6" width="18" height="14" rx="2"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M3 13h18"/>', { countId: 'nav-jobs-count' })}
-        ${navItem('activity', 'Activity', '<path d="M3 12h4l2.5-7L14 19l2.5-7H21"/>')}
-        ${navItem('cycles', 'Cycles', '<path d="M20 12a8 8 0 11-2.34-5.66L20 9"/><path d="M20 4v5h-5"/>')}
         ${navItem('tailor', 'Tailor', '<path d="M14 4h5v5"/><path d="M19 4l-7 7"/><path d="M5 10v9a1 1 0 001 1h9"/><path d="M5 14h9"/>')}
         ${navItem('resume', 'Resume', '<path d="M6 2h9l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/>')}
         ${navItem('settings', 'Settings', '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>')}
       </nav>
 
       <div class="mt-auto p-4 space-y-3">
-        <div class="surface rounded-xl p-3">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <span id="status-dot" class="h-2 w-2 rounded-full bg-ink-900 opacity-40 shrink-0"></span>
-              <span id="status-label" class="text-[12px] font-semibold capitalize text-ink-800 truncate">paused</span>
-            </div>
-            <span class="inline-flex items-center gap-1 text-[10px] font-medium text-ink-400">
-              <span id="sse-dot" class="h-1.5 w-1.5 rounded-full bg-ink-900 opacity-40"></span>
-              <span id="sse-status">connecting…</span>
-            </span>
+        <div class="surface rounded-xl p-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <span id="status-dot" class="h-2 w-2 rounded-full bg-ink-900 opacity-40 shrink-0"></span>
+            <span id="status-label" class="text-[12px] font-semibold capitalize text-ink-800 flex-1 truncate">paused</span>
           </div>
-          <div id="status-detail" class="text-[11px] text-ink-400 mt-1.5 tabular truncate min-h-[14px]"></div>
+          <div id="status-detail" class="text-[11px] text-ink-400 truncate leading-tight">No schedule active</div>
         </div>
 
         <div class="seg grid grid-cols-3 gap-1">

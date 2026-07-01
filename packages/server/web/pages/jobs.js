@@ -8,6 +8,10 @@ export function renderJobs() {
           <p class="text-sm text-ink-500 mt-1.5">Every posting your cycles have surfaced.</p>
         </div>
         <div class="flex items-center gap-2">
+          <a href="#/jobs/cycles" class="btn-ghost inline-flex items-center gap-1.5">
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+            History
+          </a>
           <button id="btn-jobs-export" class="btn-ghost inline-flex items-center gap-1.5">
             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
             Export CSV
@@ -45,16 +49,8 @@ export function renderJobs() {
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.55fr)] gap-4 items-start">
-        <div class="space-y-2 min-w-0">
-          <div class="flex items-center justify-between px-1">
-            <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400 font-semibold flex items-center gap-3">
-              <span>Recent discoveries</span>
-              <span class="text-ink-300">·</span>
-              <span class="tabular text-ink-500" id="jobs-list-meta">0 shown</span>
-            </div>
-            <div class="text-[11px] text-ink-400">latest first</div>
-          </div>
-          <ul id="jobs-list" class="space-y-2"></ul>
+        <div class="min-w-0">
+          <ul id="jobs-list" class="hidden space-y-2"></ul>
           <div id="jobs-empty" class="surface rounded-xl px-6 py-16 text-center">
             <div class="mx-auto h-10 w-10 rounded-full bg-ink-200/60 flex items-center justify-center mb-3">
               <svg class="h-5 w-5 text-ink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>

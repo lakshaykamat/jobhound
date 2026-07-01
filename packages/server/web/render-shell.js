@@ -1,6 +1,5 @@
 import { renderSidebar } from './components/sidebar.js';
 import { renderOverview } from './pages/overview.js';
-import { renderActivity } from './pages/activity.js';
 import { renderJobs } from './pages/jobs.js';
 import { renderCycles } from './pages/cycles.js';
 import { renderSetup } from './pages/setup.js';
@@ -13,7 +12,6 @@ export function renderShell() {
     ${renderSidebar()}
     <main id="main-content" class="app-main flex-1 min-w-0" tabindex="-1">
       ${renderOverview()}
-      ${renderActivity()}
       ${renderJobs()}
       ${renderCycles()}
       ${renderSetup()}
@@ -23,3 +21,4 @@ export function renderShell() {
     </main>
   `;
 }
+
