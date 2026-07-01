@@ -323,7 +323,7 @@ function renderCyclesTable(cycles) {
   }
   els.cyclesBody.innerHTML = cycles
     .map(
-      (c) => `<tr class="hover:bg-ink-50/60">
+      (c) => `<tr class="hover:bg-white/[.08] transition-colors">
         <td class="px-4 py-2.5 tabular text-ink-700" title="${escapeAttr(c.cycle_id)}">${formatTime(c.timestamp)}</td>
         <td class="px-4 py-2.5 tabular text-ink-500">${formatDurationMs(c.duration_ms)}</td>
         <td class="px-4 py-2.5 tabular text-right text-ink-800">${c.found}</td>
@@ -586,7 +586,7 @@ function renderJobCard(j) {
   const score = typeof j.score === 'number' ? Math.round(j.score) : null;
   const cls = scoreClass(score);
   const ring = `<div class="score-ring ${cls} h-10 w-10 rounded-full flex items-center justify-center shrink-0" style="--pct:${score ?? 0}">
-    <div class="h-[30px] w-[30px] rounded-full bg-white flex items-center justify-center">
+    <div class="h-[30px] w-[30px] rounded-full flex items-center justify-center" style="background:var(--bg-app)">
       <span class="text-[11.5px] font-semibold tabular ${cls}">${score ?? '—'}</span>
     </div>
   </div>`;
@@ -627,7 +627,7 @@ function paintJobDetail(j) {
   const score = typeof j.score === 'number' ? Math.round(j.score) : null;
   const cls = scoreClass(score);
   const ring = `<div class="score-ring ${cls} h-12 w-12 rounded-full flex items-center justify-center shrink-0" style="--pct:${score ?? 0}">
-    <div class="h-[38px] w-[38px] rounded-full bg-white flex items-center justify-center">
+    <div class="h-[38px] w-[38px] rounded-full flex items-center justify-center" style="background:var(--bg-app)">
       <span class="text-[13px] font-semibold tabular ${cls}">${score ?? '—'}</span>
     </div>
   </div>`;
@@ -675,7 +675,7 @@ function paintJobDetail(j) {
 
   const footer = j.apply_url
     ? `<div class="px-6 py-4 border-t border-ink-200/60 shrink-0">
-        <a href="${escapeAttr(j.apply_url)}" target="_blank" rel="noopener" class="inline-flex w-full items-center justify-center gap-2 rounded-md bg-ink-900 hover:bg-ink-800 text-ink-50 text-[13px] font-semibold px-4 py-2.5 transition-colors">
+        <a href="${escapeAttr(j.apply_url)}" target="_blank" rel="noopener" class="btn-primary w-full inline-flex items-center justify-center gap-2">
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h5"/></svg>
           Open posting
         </a>

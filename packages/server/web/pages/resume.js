@@ -51,7 +51,7 @@ export function renderResume() {
 
         <div class="surface rounded-xl px-6 py-5 space-y-3">
           <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400 font-semibold">Summary</div>
-          <textarea data-bind="summary" rows="3" class="w-full text-sm bg-ink-200/30 border border-ink-200 rounded-md px-3 py-2"></textarea>
+          <textarea data-bind="summary" rows="3" class="w-full text-sm rounded-md px-3 py-2"></textarea>
         </div>
 
         <div class="surface rounded-xl px-6 py-5 space-y-4">
@@ -74,7 +74,7 @@ export function renderResume() {
           <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400 font-semibold">Skills</div>
           <div id="tailor-skills" class="flex flex-wrap gap-1.5"></div>
           <div class="flex gap-2">
-            <input id="tailor-skill-input" type="text" placeholder="add skill, press enter" class="flex-1 text-xs bg-ink-200/30 border border-ink-200 rounded-md px-3 py-1.5" />
+            <input id="tailor-skill-input" type="text" placeholder="add skill, press enter" class="flex-1 text-xs rounded-md px-3 py-1.5" />
           </div>
         </div>
 

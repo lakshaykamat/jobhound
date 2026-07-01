@@ -8,11 +8,11 @@ export function renderJobs() {
           <p class="text-sm text-ink-500 mt-1.5">Every posting your cycles have surfaced.</p>
         </div>
         <div class="flex items-center gap-2">
-          <button id="btn-jobs-export" class="text-xs font-medium text-ink-700 px-3 py-1.5 rounded-md border border-ink-200 bg-white hover:bg-ink-100 transition-colors inline-flex items-center gap-1.5">
+          <button id="btn-jobs-export" class="btn-ghost inline-flex items-center gap-1.5">
             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
             Export CSV
           </button>
-          <button id="btn-jobs-refresh" class="text-xs font-medium text-ink-700 px-3 py-1.5 rounded-md border border-ink-200 bg-white hover:bg-ink-100 transition-colors inline-flex items-center gap-1.5">
+          <button id="btn-jobs-refresh" class="btn-ghost inline-flex items-center gap-1.5">
             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 11-2.34-5.66L20 9"/><path d="M20 4v5h-5"/></svg>
             Refresh
           </button>
@@ -33,14 +33,14 @@ export function renderJobs() {
             </button>
           </div>
           <div id="jobs-date-range" class="hidden items-center gap-1.5 ml-1">
-            <input id="jobs-date-from" type="date" class="text-xs px-2 py-1 rounded-md border border-ink-200 bg-white text-ink-700 focus:outline-none focus:ring-2 focus:ring-ink-200 focus:border-ink-400 tabular" />
+            <input id="jobs-date-from" type="date" class="text-xs px-2 py-1 rounded-md tabular" />
             <span class="text-ink-400 text-xs">→</span>
-            <input id="jobs-date-to" type="date" class="text-xs px-2 py-1 rounded-md border border-ink-200 bg-white text-ink-700 focus:outline-none focus:ring-2 focus:ring-ink-200 focus:border-ink-400 tabular" />
+            <input id="jobs-date-to" type="date" class="text-xs px-2 py-1 rounded-md tabular" />
           </div>
         </div>
         <div class="relative">
           <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-          <input id="jobs-search" type="text" placeholder="Search title, company, source…" class="pl-8 pr-3 py-1.5 w-72 text-xs rounded-md border border-ink-200 bg-white focus:outline-none focus:ring-2 focus:ring-ink-200 focus:border-ink-400 placeholder-ink-400" />
+          <input id="jobs-search" type="text" placeholder="Search title, company, source…" class="pl-8 pr-3 py-1.5 w-72 text-xs rounded-md" />
         </div>
       </div>
 

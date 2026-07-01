@@ -11,17 +11,17 @@ export function renderSetup() {
       <form id="setup-form" class="space-y-5">
         <div class="surface rounded-xl px-6 py-5 space-y-4">
           <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400 font-semibold">API keys</div>
-          ${field('SerpApi key', `<input name="serpapi_key" type="password" required autocomplete="off" class="mt-1.5 w-full text-sm bg-ink-200/30 border border-ink-200 rounded-md px-3 py-1.5" />`)}
-          ${field('OpenAI key', `<input name="openai_key" type="password" required autocomplete="off" class="mt-1.5 w-full text-sm bg-ink-200/30 border border-ink-200 rounded-md px-3 py-1.5" />`)}
-          ${field('OpenAI model', `<input name="model" type="text" value="gpt-4o-mini" class="mt-1.5 w-full text-sm bg-ink-200/30 border border-ink-200 rounded-md px-3 py-1.5" />`)}
+          ${field('SerpApi key', `<input name="serpapi_key" type="password" required autocomplete="off" class="mt-1.5 w-full text-sm rounded-md px-3 py-1.5" />`)}
+          ${field('OpenAI key', `<input name="openai_key" type="password" required autocomplete="off" class="mt-1.5 w-full text-sm rounded-md px-3 py-1.5" />`)}
+          ${field('OpenAI model', `<input name="model" type="text" value="gpt-4o-mini" class="mt-1.5 w-full text-sm rounded-md px-3 py-1.5" />`)}
         </div>
 
         <div class="surface rounded-xl px-6 py-5 space-y-4">
           <div class="text-[11px] uppercase tracking-[0.18em] text-ink-400 font-semibold">Search</div>
-          ${field('Queries (one per line)', `<textarea name="queries" rows="4" required placeholder="backend engineer remote india&#10;senior software engineer bengaluru" class="mt-1.5 w-full text-sm font-mono bg-ink-200/30 border border-ink-200 rounded-md px-3 py-2"></textarea>`)}
+          ${field('Queries (one per line)', `<textarea name="queries" rows="4" required placeholder="backend engineer remote india&#10;senior software engineer bengaluru" class="mt-1.5 w-full text-sm font-mono rounded-md px-3 py-2"></textarea>`)}
           <div class="grid grid-cols-2 gap-3">
-            ${field('Country (ISO-2)', `<input name="country" type="text" value="in" maxlength="2" class="mt-1.5 w-full text-sm bg-ink-200/30 border border-ink-200 rounded-md px-3 py-1.5" />`)}
-            ${field('Language', `<input name="language" type="text" value="en" maxlength="3" class="mt-1.5 w-full text-sm bg-ink-200/30 border border-ink-200 rounded-md px-3 py-1.5" />`)}
+            ${field('Country (ISO-2)', `<input name="country" type="text" value="in" maxlength="2" class="mt-1.5 w-full text-sm rounded-md px-3 py-1.5" />`)}
+            ${field('Language', `<input name="language" type="text" value="en" maxlength="3" class="mt-1.5 w-full text-sm rounded-md px-3 py-1.5" />`)}
           </div>
         </div>
 
@@ -36,7 +36,7 @@ export function renderSetup() {
           </label>
           <input id="setup-resume-file" name="resume" type="file" accept="application/pdf" required class="hidden" />
           ${field('Seniority you\'re targeting', `
-            <select name="seniority" class="mt-1.5 w-full text-sm bg-ink-200/30 border border-ink-200 rounded-md px-3 py-1.5">
+            <select name="seniority" class="mt-1.5 w-full text-sm rounded-md px-3 py-1.5">
               <option value="">(unspecified)</option>
               ${seniorities.map((s) => `<option value="${s}">${s}</option>`).join('')}
             </select>
@@ -45,7 +45,7 @@ export function renderSetup() {
 
         <div class="flex items-center justify-end gap-3">
           <div id="setup-status" class="text-xs text-ink-400 mr-auto min-h-[18px]"></div>
-          <button type="submit" class="text-xs font-semibold text-ink-100 bg-ink-900 px-4 py-2 rounded-md hover:opacity-90 transition-opacity disabled:opacity-40">Save &amp; continue</button>
+          <button type="submit" class="btn-primary disabled:opacity-40">Save &amp; continue</button>
         </div>
       </form>
     </section>

@@ -12,7 +12,7 @@ export function renderActivity() {
             <input id="filter-known" type="checkbox" class="rounded border-ink-300 text-ink-900 focus:ring-ink-500" />
             include skipped
           </label>
-          <button id="btn-clear" class="text-xs font-medium text-ink-500 hover:text-ink-900 px-2 py-1 rounded hover:bg-ink-100 transition-colors">Clear</button>
+          <button id="btn-clear" class="btn-ghost text-xs">Clear</button>
         </div>
       </header>
 
@@ -22,7 +22,7 @@ export function renderActivity() {
             <h2 class="text-sm font-semibold">Current cycle</h2>
             <div id="cycle-meta" class="text-xs text-ink-400 mt-0.5">No cycle in flight.</div>
           </div>
-          <span id="cycle-state-pill" class="text-[10px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1 rounded-md bg-ink-200 text-ink-500">idle</span>
+          <span id="cycle-state-pill" class="text-[10px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1 rounded-md border border-ink-300 text-ink-500">idle</span>
         </div>
         <div class="px-6 py-5">
           <div class="grid grid-cols-5 gap-3 text-center">
@@ -58,9 +58,9 @@ export function renderActivity() {
 
 function stage(label, id) {
   return `
-    <div class="rounded-lg bg-ink-200/40 py-3 border border-ink-200/40">
-      <div class="text-[10px] uppercase tracking-[0.18em] text-ink-400 font-semibold">${label}</div>
-      <div class="mt-1 text-xl font-semibold tabular" id="${id}">0</div>
+    <div class="rounded-xl py-4 px-3 text-center border border-ink-300/40" style="background:rgba(255,255,255,.04)">
+      <div class="text-[10px] uppercase tracking-[0.14em] text-ink-400 font-semibold">${label}</div>
+      <div class="mt-2 text-2xl font-semibold tabular" id="${id}">0</div>
     </div>
   `;
 }

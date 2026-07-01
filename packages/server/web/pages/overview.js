@@ -7,8 +7,8 @@ export function renderOverview() {
         <p class="text-sm text-ink-500 mt-1.5" id="ov-subtitle">Server is paused. Start it from the sidebar.</p>
       </header>
 
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-ink-200/60 rounded-xl overflow-hidden border border-ink-200/60">
-        ${metric('Searches', '<span id="m-searches">—</span><span class="text-sm text-ink-400 font-medium">/100</span>', 'm-searches-detail', `<div class="mt-2 h-1 rounded-full bg-ink-100 overflow-hidden"><div id="m-searches-bar" class="h-full bg-ink-900 transition-all duration-500" style="width: 0%"></div></div>`)}
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        ${metric('Searches', '<span id="m-searches">—</span><span class="text-lg text-ink-400 font-medium ml-0.5">/100</span>', 'm-searches-detail', `<div class="mt-3 h-0.5 rounded-full bg-ink-200 overflow-hidden"><div id="m-searches-bar" class="h-full bg-ink-900 transition-all duration-500" style="width: 0%"></div></div>`)}
         ${metric('Tokens', '<span id="m-tokens">—</span>', 'm-tokens-detail', '', 'this month')}
         ${metric('Spend', '$<span id="m-cost">—</span>', 'm-cost-detail', '', 'this month')}
         ${metric('Cycles', '<span id="m-cycles">—</span>', null, '<div class="mt-2 text-[11px] text-ink-400">completed this month</div>')}
@@ -43,9 +43,9 @@ export function renderOverview() {
 function metric(label, valueHtml, detailId, extraHtml = '', detailText = '') {
   const detail = detailId ? `<div class="mt-2 text-[11px] text-ink-400" id="${detailId}">${detailText}</div>` : '';
   return `
-    <div class="bg-white p-5">
-      <div class="text-[10px] uppercase tracking-[0.18em] text-ink-400 font-semibold">${label}</div>
-      <div class="mt-2 text-2xl font-semibold tabular">${valueHtml}</div>
+    <div class="surface rounded-xl p-5">
+      <div class="text-[10px] uppercase tracking-[0.16em] text-ink-400 font-semibold">${label}</div>
+      <div class="mt-3 text-3xl font-semibold tabular">${valueHtml}</div>
       ${extraHtml}
       ${detail}
     </div>

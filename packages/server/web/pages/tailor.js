@@ -13,7 +13,7 @@ export function renderTailor() {
       <div id="tailor-needs-resume" class="surface rounded-xl px-6 py-10 text-center hidden">
         <div class="text-sm font-medium text-ink-700">No base resume yet</div>
         <div class="text-xs text-ink-400 mt-1 mb-4">Upload one on the Resume page, then come back here to tailor it.</div>
-        <a href="#/resume" class="inline-flex items-center text-xs font-semibold text-ink-100 bg-ink-900 px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity">Go to Resume</a>
+        <a href="#/resume" class="btn-primary">Go to Resume</a>
       </div>
 
       <div id="tailor-run" class="tailor-workspace hidden">
@@ -25,7 +25,7 @@ export function renderTailor() {
             </div>
             <button id="btn-tailor-run" class="btn-primary shrink-0" type="button">Tailor</button>
           </div>
-          <textarea id="tailor-jd" placeholder="Paste the job description here..." class="tailor-textarea w-full flex-1 text-sm font-mono bg-ink-200/30 border border-ink-200 rounded-md px-3 py-2 leading-relaxed focus:outline-none focus:ring-2 focus:ring-ink-300"></textarea>
+          <textarea id="tailor-jd" placeholder="Paste the job description here..." class="tailor-textarea w-full flex-1 text-sm font-mono rounded-md px-3 py-2 leading-relaxed"></textarea>
           <div class="flex items-center justify-between gap-3 text-xs text-ink-400">
             <div id="tailor-run-status" class="min-h-[18px]" role="status" aria-live="polite"></div>
             <div class="hidden sm:block">Stored resume updates after tailoring</div>

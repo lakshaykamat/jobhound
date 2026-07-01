@@ -10,7 +10,7 @@ export function renderCycles() {
       <div class="surface rounded-xl overflow-hidden">
         <div class="overflow-x-auto">
           <table class="min-w-full text-xs">
-            <thead class="bg-ink-200/40 text-ink-500">
+            <thead class="text-ink-500 border-b border-ink-300/40">
               <tr>
                 ${cols.map((c, i) => `<th class="${i < 2 ? 'text-left' : 'text-right'} font-semibold uppercase tracking-[0.18em] text-[10px] px-4 py-2.5">${c}</th>`).join('')}
               </tr>
