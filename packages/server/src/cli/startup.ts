@@ -1,4 +1,5 @@
-import { AppConfig, tryLoadConfig } from '../config';
+import { existsSync } from 'fs';
+import { AppConfig, loadConfig } from '../config';
 import { logger } from '../logger';
 
 export interface StartupCheck {
@@ -7,18 +8,24 @@ export interface StartupCheck {
 }
 
 export interface StartupResult {
-  config: AppConfig | null;
+  config: AppConfig;
 }
 
 export function validateStartup(opts: StartupCheck): StartupResult {
-  const config = tryLoadConfig(opts.configPath);
+  if (!existsSync(opts.configPath)) {
+    logger.error('config.json not found — create it before starting the server', {
+      config_path: opts.configPath,
+      data_dir: opts.dataDir,
+    });
+    process.exit(1);
+  }
 
-  if (!config) {
-    logger.warn(
-      'no valid config.json found; server will boot but cycles cannot run until config is saved via the Setup page',
-      { config_path: opts.configPath, data_dir: opts.dataDir },
-    );
-    return { config: null };
+  let config: AppConfig;
+  try {
+    config = loadConfig(opts.configPath);
+  } catch (err) {
+    logger.error('config.json is invalid', { config_path: opts.configPath, err });
+    process.exit(1);
   }
 
   logger.info('startup validation passed', {
